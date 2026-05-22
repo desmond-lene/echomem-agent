@@ -760,6 +760,8 @@ INDEX_HTML = r"""<!doctype html>
         <div class="side-view" id="memoryPanel">
           <label>Agent Config</label>
           <pre id="config">{}</pre>
+          <label>EchoMemory Runtime</label>
+          <pre id="runtime">{}</pre>
           <label>Filesystem Target</label>
           <div class="fs-controls">
             <label>目标 URI<input id="fsTarget" value="echo://sessions/chat-001" /></label>
@@ -769,6 +771,7 @@ INDEX_HTML = r"""<!doctype html>
             <button id="treeMode">树状展开</button>
             <button id="flatMode">平铺展开</button>
             <button id="refreshTree">刷新目标</button>
+            <button id="treeEngineTarget">Tree 引擎</button>
           </div>
           <div class="fs-view" id="tree"></div>
           <label>Selected File</label>
@@ -1054,6 +1057,12 @@ INDEX_HTML = r"""<!doctype html>
         $("modelBadge").textContent = "model unavailable";
         $("status").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
       }
+      try {
+        const runtime = await fetch("/agent/inspect/runtime").then((r) => r.json());
+        show("runtime", runtime);
+      } catch (error) {
+        show("runtime", {error: error.message});
+      }
       syncFsTarget();
       $("memorySessionLabel").textContent = sessionId() || "-";
       $("memoryTargetLabel").textContent = $("fsTarget").value || "echo://sessions/-";
@@ -1135,6 +1144,10 @@ INDEX_HTML = r"""<!doctype html>
     $("refreshTree").onclick = refreshTree;
     $("treeMode").onclick = () => { fsMode = "tree"; renderFs(currentTree.entries); };
     $("flatMode").onclick = () => { fsMode = "flat"; renderFs(currentTree.entries); };
+    $("treeEngineTarget").onclick = async () => {
+      $("fsTarget").value = "echo://engine/tree";
+      await refreshTree();
+    };
     $("chatNav").onclick = () => setSideView("context");
     $("memoryNav").onclick = () => setSideView("memory");
     $("memoryRefresh").onclick = refreshInspectors;
