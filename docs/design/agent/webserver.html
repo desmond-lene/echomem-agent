@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Web Playground 设计</title>
+  <style>
+    :root {
+      --ink: #142033;
+      --muted: #65748a;
+      --paper: #fbfcff;
+      --line: #d8e1ee;
+      --blue: #2357c6;
+      --blue-soft: #eef4ff;
+      --green: #16734d;
+      --green-soft: #edf8f1;
+      --orange: #a65a16;
+      --orange-soft: #fff5e8;
+      --purple: #6541aa;
+      --purple-soft: #f5efff;
+      --red: #a23a3a;
+      --red-soft: #fff1f1;
+      --gray-soft: #f3f6fb;
+      --shadow: 0 10px 28px rgba(24, 42, 80, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #f4f7fb;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.62;
+      letter-spacing: 0;
+    }
+
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: var(--gray-soft);
+      color: #28364f;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 0;
+      padding: 14px;
+      border-radius: 8px;
+      background: #111827;
+      color: #e5e7eb;
+      line-height: 1.55;
+    }
+
+    pre code { padding: 0; background: transparent; color: inherit; }
+
+    .page {
+      width: min(1380px, calc(100% - 36px));
+      margin: 0 auto 56px;
+    }
+
+    header {
+      padding: 38px 0 22px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 62px);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      width: min(980px, 100%);
+      margin: 18px auto 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: white;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .toc {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      padding: 12px 0;
+      background: rgba(244, 247, 251, 0.92);
+      backdrop-filter: blur(8px);
+    }
+
+    .toc a {
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: white;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .section {
+      margin-top: 18px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+
+    h2 { margin: 0 0 12px; font-size: 26px; }
+    h3 { margin: 0 0 8px; font-size: 18px; }
+    p { margin: 0; }
+
+    .lead {
+      color: #475569;
+      font-size: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .card {
+      min-height: 145px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+    }
+
+    .card p { color: var(--muted); }
+
+    .tag {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .blue { color: var(--blue); background: var(--blue-soft); }
+    .green { color: var(--green); background: var(--green-soft); }
+    .orange { color: var(--orange); background: var(--orange-soft); }
+    .purple { color: var(--purple); background: var(--purple-soft); }
+    .red { color: var(--red); background: var(--red-soft); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+    }
+
+    th, td {
+      padding: 12px 13px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    th {
+      background: #edf3fb;
+      color: #26364d;
+      font-size: 13px;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .wide-note {
+      margin-top: 14px;
+      padding: 14px;
+      border-left: 4px solid var(--blue);
+      border-radius: 8px;
+      background: var(--blue-soft);
+      color: #30425f;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    footer {
+      margin-top: 24px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      .grid, .two-col { grid-template-columns: 1fr; }
+      .section { padding: 18px; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">EchoMemory Agent Design</p>
+      <h1>Agent Web Playground</h1>
+      <p class="subtitle">
+        本文定义一个真实 Agent 对话场景驱动的本地 Web 页面。页面模拟用户与 Agent 的对话、工具调用和提交归档，
+        通过 EchoMemory 标准对外接口写入数据，并通过 runtime / inspection 调测接口实时查看 EchoMemory 内部状态是否正确变化。
+      </p>
+      <div class="meta-row">
+        <span class="pill">设计目录：docs/design/agent</span>
+        <span class="pill">代码目录：src/agent</span>
+        <span class="pill">默认端口：8765</span>
+        <span class="pill">主场景：Agent Chat</span>
+        <span class="pill">首版验证：D01-D03</span>
+      </div>
+    </header>
+
+    <nav class="toc">
+      <a href="#goal">目标</a>
+      <a href="#principle">原则</a>
+      <a href="#scenario">对话场景</a>
+      <a href="#actions">动作映射</a>
+      <a href="#ui">页面结构</a>
+      <a href="#public-api">标准接口</a>
+      <a href="#inspection-api">调测接口</a>
+      <a href="#layout">代码布局</a>
+      <a href="#plan">实施计划</a>
+      <a href="#tests">验收</a>
+    </nav>
+
+    <section class="section" id="goal">
+      <h2>1. 目标</h2>
+      <p class="lead">
+        目标不是做一个“内部对象操作台”，而是做一个真实 Agent 使用 EchoMemory 的最小可视化 playground。
+        用户在页面中看到的是对话、工具调用和提交按钮；EchoMemory 侧看到的是标准 service/API 调用和可检查的 runtime 状态。
+      </p>
+      <div class="grid">
+        <article class="card">
+          <span class="tag blue">真实场景</span>
+          <h3>以对话为中心</h3>
+          <p>首屏就是 Agent 对话，而不是模块列表。打开新对话会触发 session open，发送消息会触发 add message。</p>
+        </article>
+        <article class="card">
+          <span class="tag green">标准接口</span>
+          <h3>Agent 调用公开能力</h3>
+          <p>Agent 页面不直接写文件系统，不调用内部 archive helper，只通过 EchoMemory 对外接口完成 session、message、ref、commit。</p>
+        </article>
+        <article class="card">
+          <span class="tag purple">可观察</span>
+          <h3>调测接口看内部状态</h3>
+          <p>页面右侧通过 runtime、filesystem tree、event trace 等 inspection API 查看系统是否真的写入、归档和投递。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="principle">
+      <h2>2. 设计原则</h2>
+      <table>
+        <thead>
+          <tr><th>原则</th><th>要求</th><th>原因</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Agent first</td>
+            <td>页面功能从 Agent 的自然动作出发：新对话、发消息、工具调用、提交当前对话。</td>
+            <td>验证体验更接近真实集成方式，避免变成低层 API 调试器。</td>
+          </tr>
+          <tr>
+            <td>标准接口优先</td>
+            <td>写入类操作只能通过 EchoMemory 对外接口，不能通过调测接口绕过业务服务。</td>
+            <td>确保页面验证的是未来 SDK/Agent 真正会依赖的合同。</td>
+          </tr>
+          <tr>
+            <td>观察与操作分离</td>
+            <td>Agent 动作负责写入；inspection API 只负责查看 runtime、tree、manifest、event trace。</td>
+            <td>保留信息隐藏与权限边界，同时让内部执行结果足够直观。</td>
+          </tr>
+          <tr>
+            <td>不提前伪造未来能力</td>
+            <td>D04/D05 未完成前，只显示 not_ready 状态，不模拟记忆提取和召回。</td>
+            <td>避免页面看似完整但代码能力不存在。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="scenario">
+      <h2>3. Agent 对话场景</h2>
+      <p class="lead">
+        首版页面围绕一个“Agent 帮用户完成任务”的最小闭环：打开新对话，用户发出需求，Agent 回复，Agent 可模拟一次工具调用，
+        最后用户点击 commit 验证 session 归档。
+      </p>
+      <pre><code>1. 用户点击「新对话」
+   -> Agent App 调用 EchoMemory session.open(user_id, agent_id, session_id)
+
+2. 用户发送第一条消息
+   -> Agent App 调用 session.add_message(role="user", content=...)
+
+3. Agent 生成回复
+   -> Agent App 调用 session.add_message(role="assistant", content=...)
+
+4. Agent 模拟工具调用
+   -> Agent App 调用 session.add_ref(kind="tool_call", ...)
+   -> Agent App 可追加 tool role message 或 assistant message 描述结果
+
+5. 用户点击「Commit」
+   -> Agent App 调用 session.commit()
+   -> EchoMemory 写入 archive 并发布 session.committed 事件
+
+6. 页面 inspection 区自动刷新
+   -> 查看 runtime 状态、echo://sessions tree、archive.json、event trace</code></pre>
+      <div class="wide-note">
+        这里的“首次提交”不是一个隐藏批处理。新对话必须显式调用 <code>session.open</code>，首条用户消息必须显式调用
+        <code>session.add_message</code>。这样页面能清楚展示每一步对 EchoMemory 状态的影响。
+      </div>
+    </section>
+
+    <section class="section" id="actions">
+      <h2>4. 页面动作与 EchoMemory 调用映射</h2>
+      <table>
+        <thead>
+          <tr><th>页面动作</th><th>EchoMemory 标准调用</th><th>页面反馈</th><th>调测观察</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>新对话</td>
+            <td><code>SessionService.open(user_id, agent_id, session_id)</code></td>
+            <td>生成当前对话上下文，显示 session scope。</td>
+            <td><code>echo://sessions/{session_id}/current/session.json</code> 出现。</td>
+          </tr>
+          <tr>
+            <td>发送用户消息</td>
+            <td><code>SessionHandle.add_message(role="user", content)</code></td>
+            <td>对话流新增用户气泡。</td>
+            <td><code>current/messages.jsonl</code> 新增一行。</td>
+          </tr>
+          <tr>
+            <td>Agent 回复</td>
+            <td><code>SessionHandle.add_message(role="assistant", content)</code></td>
+            <td>对话流新增 Agent 气泡。</td>
+            <td><code>current/messages.jsonl</code> 新增 assistant 记录。</td>
+          </tr>
+          <tr>
+            <td>模拟工具调用</td>
+            <td><code>SessionHandle.add_ref(kind="tool_call", name, content, mime_type)</code></td>
+            <td>对话流显示工具卡片。</td>
+            <td><code>current/refs/</code> 出现 ref 文件，<code>refs.jsonl</code> 新增记录。</td>
+          </tr>
+          <tr>
+            <td>Commit</td>
+            <td><code>SessionHandle.commit()</code></td>
+            <td>显示 <code>SessionCommitResult</code>。</td>
+            <td><code>history/archive_001</code> 出现，event trace 出现 <code>session.committed</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="ui">
+      <h2>5. Web 页面结构</h2>
+      <p class="lead">
+        页面应像一个小型 Agent 客户端，而不是 API 表单集合。左侧是对话主工作区，右侧是 EchoMemory 状态观察区。
+      </p>
+      <div class="two-col">
+        <article class="card">
+          <span class="tag blue">Agent Chat</span>
+          <h3>对话主区</h3>
+          <p>包含 user_id、agent_id、session_id、新对话按钮、消息输入框、Agent 回复输入框、模拟工具调用按钮和 Commit 按钮。</p>
+        </article>
+        <article class="card">
+          <span class="tag green">EchoMemory Inspector</span>
+          <h3>状态观察区</h3>
+          <p>实时展示 runtime snapshot、session tree、archive manifest、event trace、最后一次 API response。</p>
+        </article>
+      </div>
+      <table>
+        <thead>
+          <tr><th>区域</th><th>控件/内容</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>对话配置栏</td>
+            <td><code>user_id</code>、<code>agent_id</code>、<code>session_id</code>、新对话。</td>
+            <td>新对话只调用 <code>session.open</code>，不会自动 commit。</td>
+          </tr>
+          <tr>
+            <td>消息流</td>
+            <td>用户气泡、Agent 气泡、工具卡片。</td>
+            <td>每条展示对应的 EchoMemory 调用状态，失败时保留错误。</td>
+          </tr>
+          <tr>
+            <td>输入区</td>
+            <td>发送用户消息、添加 Agent 回复、模拟工具调用。</td>
+            <td>按钮触发标准接口调用，调用成功后刷新 inspector。</td>
+          </tr>
+          <tr>
+            <td>提交区</td>
+            <td>Commit 按钮、commit result。</td>
+            <td>用于验证归档边界；返回值不展示内部 archive URI。</td>
+          </tr>
+          <tr>
+            <td>观察区</td>
+            <td>Runtime、目标 URI 文件系统视图、Archive、Events、Raw JSON。</td>
+            <td>支持树状展开和平铺展开；点击文件通过只读接口查看内容，不提供写文件能力。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="public-api">
+      <h2>6. Agent 使用的标准对外接口</h2>
+      <p class="lead">
+        Agent 页面中的业务动作应调用 EchoMemory 标准对外接口。若当前代码只完成 service 层接口，Web 实现可以先在 agent server 内部调用
+        <code>SessionService</code>，但路径和语义应按未来标准 API 设计，避免调测接口成为事实标准。
+      </p>
+      <table>
+        <thead>
+          <tr><th>方法</th><th>路径</th><th>语义</th><th>底层当前实现</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/sessions/open</code></td>
+            <td>打开新对话或恢复已有对话。</td>
+            <td><code>SessionService.open(...)</code></td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/sessions/{session_id}/messages</code></td>
+            <td>追加 user / assistant / tool message。</td>
+            <td><code>SessionHandle.add_message(...)</code></td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/sessions/{session_id}/refs</code></td>
+            <td>追加工具调用、工具结果、搜索结果或 artifact。</td>
+            <td><code>SessionHandle.add_ref(...)</code></td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/api/sessions/{session_id}/commit</code></td>
+            <td>提交当前对话为 archive。</td>
+            <td><code>SessionHandle.commit()</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>示例流程</h3>
+      <pre><code>POST /api/sessions/open
+{
+  "user_id": "alice",
+  "agent_id": "demo-agent",
+  "session_id": "chat-001"
+}
+
+POST /api/sessions/chat-001/messages
+{
+  "role": "user",
+  "content": "帮我整理一下 D03 的提交方案"
+}
+
+POST /api/sessions/chat-001/refs
+{
+  "kind": "tool_call",
+  "name": "read_design_doc",
+  "mime_type": "application/json",
+  "content": "{\"path\":\"docs/design/features/03.session-commit.html\"}"
+}
+
+POST /api/sessions/chat-001/commit
+{}</code></pre>
+    </section>
+
+    <section class="section" id="inspection-api">
+      <h2>7. EchoMemory 调测接口</h2>
+      <p class="lead">
+        调测接口只用于观察内部执行是否成功，不承担 Agent 写入动作。路径建议使用 <code>/agent/inspect/**</code>，
+        既表明它服务于 agent playground，又避免和正式 <code>/api/**</code> 混淆。
+      </p>
+      <table>
+        <thead>
+          <tr><th>方法</th><th>路径</th><th>用途</th><th>约束</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GET</td>
+            <td><code>/agent/inspect/runtime</code></td>
+            <td>查看 runtime mode、feature readiness、workspace zones。</td>
+            <td>复用 <code>runtime_payload</code>，不暴露 workspace 绝对路径。</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/agent/inspect/fs/tree?uri=echo://sessions/{session_id}</code></td>
+            <td>只读查看 session 当前目录和 history 目录。</td>
+            <td>只允许 <code>echo://</code>，限制 <code>max_depth</code>。</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/agent/inspect/fs/read?uri=...</code></td>
+            <td>读取 <code>session.json</code>、<code>messages.jsonl</code>、<code>archive.json</code>。</td>
+            <td>只读，不提供 write/delete/move。</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/agent/inspect/events</code></td>
+            <td>查看本地 recording event sink 收到的事件。</td>
+            <td>agent playground only，不作为正式 event API。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="wide-note">
+        调测接口可以显示 archive manifest 和 event payload 中的内部 URI，因为它的定位是本地观察；但这些字段不能反向进入
+        <code>SessionCommitResult</code> 或 Agent 标准写入接口。
+      </div>
+    </section>
+
+    <section class="section" id="layout">
+      <h2>8. 代码布局</h2>
+      <pre><code>src/
+├── echomem/
+│   ├── server.py                  # 正式 EchoMemory HTTP 服务
+│   ├── runtime/
+│   └── service/
+└── agent/
+    ├── __init__.py
+    ├── agent_server.py             # Agent playground server，默认 127.0.0.1:8765
+    ├── routes.py                   # /api/** 标准动作 + /agent/inspect/** 调测接口
+    ├── payloads.py                 # dataclass/event/fs entry -> JSON
+    ├── runtime_factory.py          # 组装带 recording sink 的 runtime
+    └── static/
+        └── index.html              # Agent Chat + Inspector 页面</code></pre>
+      <table>
+        <thead>
+          <tr><th>目录</th><th>用途</th><th>边界</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>docs/design/agent/</code></td>
+            <td>存放 Agent Playground、对话模拟、可视化验证相关设计。</td>
+            <td>统一使用 agent playground 命名。</td>
+          </tr>
+          <tr>
+            <td><code>src/agent/</code></td>
+            <td>存放 Agent Playground 的实现代码。</td>
+            <td>不放在 <code>src/echomem</code> 下，且不 import <code>echomem.*</code>，后续可以搬到独立项目。</td>
+          </tr>
+          <tr>
+            <td><code>tests/test_agent_*.py</code></td>
+            <td>存放 Agent Playground 的 HTTP 黑盒测试。</td>
+            <td>使用临时 workspace 和端口 <code>0</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="plan">
+      <h2>9. 实施计划</h2>
+      <table>
+        <thead>
+          <tr><th>步骤</th><th>修改内容</th><th>原因</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>创建 <code>docs/design/agent</code> 和 <code>src/agent</code>。</td>
+            <td>按 agent playground 定位组织设计与代码，且保证后续可以迁移到独立项目。</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>实现 agent server 首页，首屏为对话页面。</td>
+            <td>让验证从真实 Agent 对话开始，而不是从内部模块开始。</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>实现 <code>/api/sessions/open</code> 和 <code>/api/sessions/{id}/messages</code>。</td>
+            <td>完成“新对话 + 首条消息”的首次提交前置动作。</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>实现 <code>/api/sessions/{id}/refs</code>。</td>
+            <td>模拟工具调用和工具结果，验证 multiple refs 能进入 session。</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>实现 <code>/api/sessions/{id}/commit</code> 与 Commit 按钮。</td>
+            <td>手动触发归档，观察 archive 和事件投递。</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>实现 <code>/agent/inspect/runtime</code>、FS tree/read、events。</td>
+            <td>实时查看 EchoMemory 内部执行是否成功。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="tests">
+      <h2>10. 验收测试</h2>
+      <table>
+        <thead>
+          <tr><th>测试</th><th>验收标准</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>test_agent_page_serves_chat_ui</code></td>
+            <td>访问 <code>/</code> 返回 Agent Chat 页面，包含新对话、发送消息、模拟工具调用、Commit。</td>
+          </tr>
+          <tr>
+            <td><code>test_agent_uses_standard_session_api</code></td>
+            <td>通过 <code>/api/sessions/open</code> 和 <code>/api/sessions/{id}/messages</code> 能写入 session。</td>
+          </tr>
+          <tr>
+            <td><code>test_agent_tool_call_adds_ref</code></td>
+            <td>通过 <code>/api/sessions/{id}/refs</code> 后，inspection tree 能看到 <code>current/refs</code> 和 <code>refs.jsonl</code>。</td>
+          </tr>
+          <tr>
+            <td><code>test_agent_commit_creates_archive</code></td>
+            <td>点击 Commit 对应 HTTP 调用返回 <code>archive_001</code>，inspection tree 能看到 <code>history/archive_001</code>。</td>
+          </tr>
+          <tr>
+            <td><code>test_agent_inspection_is_read_only</code></td>
+            <td><code>/agent/inspect/**</code> 不提供 write/delete/move 能力。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      EchoMemory Agent Playground design. Operate through public contracts, inspect through read-only tooling.
+    </footer>
+  </main>
+</body>
+</html>

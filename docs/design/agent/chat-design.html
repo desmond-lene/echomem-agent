@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent Chat 深度改造设计</title>
+  <style>
+    :root {
+      --ink: #142033;
+      --muted: #65748a;
+      --paper: #fbfcff;
+      --line: #d8e1ee;
+      --blue: #2357c6;
+      --blue-soft: #eef4ff;
+      --green: #16734d;
+      --green-soft: #edf8f1;
+      --orange: #a65a16;
+      --orange-soft: #fff5e8;
+      --purple: #6541aa;
+      --purple-soft: #f5efff;
+      --red: #a23a3a;
+      --red-soft: #fff1f1;
+      --gray-soft: #f3f6fb;
+      --shadow: 0 10px 28px rgba(24, 42, 80, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #f4f7fb;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.62;
+      letter-spacing: 0;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: var(--gray-soft);
+      color: #28364f;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 0;
+      padding: 14px;
+      border-radius: 8px;
+      background: #111827;
+      color: #e5e7eb;
+      line-height: 1.55;
+    }
+    pre code { padding: 0; background: transparent; color: inherit; }
+    .page { width: min(1380px, calc(100% - 36px)); margin: 0 auto 56px; }
+    header { padding: 38px 0 22px; text-align: center; }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 62px);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      width: min(980px, 100%);
+      margin: 18px auto 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 22px;
+    }
+    .pill {
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: white;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .toc {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      padding: 12px 0;
+      background: rgba(244, 247, 251, 0.92);
+      backdrop-filter: blur(8px);
+    }
+    .toc a {
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: white;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .section {
+      margin-top: 18px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      box-shadow: var(--shadow);
+    }
+    .section h2 { margin: 0 0 10px; font-size: 27px; }
+    .section h3 { margin: 20px 0 8px; font-size: 19px; }
+    .section p { margin: 8px 0; color: #334155; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .card {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+    .card h3 { margin-top: 0; }
+    .tag {
+      display: inline-block;
+      margin-bottom: 8px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .tag.blue { background: var(--blue-soft); color: var(--blue); }
+    .tag.green { background: var(--green-soft); color: var(--green); }
+    .tag.orange { background: var(--orange-soft); color: var(--orange); }
+    .tag.purple { background: var(--purple-soft); color: var(--purple); }
+    table {
+      width: 100%;
+      margin-top: 14px;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #f8fafc; color: #334155; }
+    tr:last-child td { border-bottom: 0; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .step {
+      min-height: 112px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      font-weight: 800;
+    }
+    .step span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .callout {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid #bcd0ff;
+      border-radius: 8px;
+      background: var(--blue-soft);
+      color: #1e3a8a;
+    }
+    .warn {
+      border-color: #ffd3a3;
+      background: var(--orange-soft);
+      color: #8a4b12;
+    }
+    ul { margin: 8px 0 0 20px; padding: 0; color: #334155; }
+    li { margin: 5px 0; }
+    @media (max-width: 1120px) {
+      .grid { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .page { width: min(100% - 24px, 1380px); }
+      .section { padding: 18px; }
+      .flow { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <p class="eyebrow">EchoMem Agent / Chat Runtime Design</p>
+      <h1>Agent Chat 深度改造设计</h1>
+      <p class="subtitle">
+        本文定义 echomem-agent 的会话能力升级方案：开放工程配置、接入真实大模型、通过标准 HTTP 方式连接 EchoMemory，
+        并按标准 Agent 流程完成检索增强、上下文拼接、模型调用、session 写入与归档。
+      </p>
+      <div class="meta-row">
+        <span class="pill">目标工程：echomem-agent</span>
+        <span class="pill">设计文件：docs/design/agent/chat-design.html</span>
+        <span class="pill">模型入口：OpenAI-compatible / OpenClaw</span>
+        <span class="pill">记忆入口：EchoMemory HTTP API</span>
+      </div>
+    </header>
+
+    <nav class="toc">
+      <a href="#goals">目标</a>
+      <a href="#config">开放配置</a>
+      <a href="#llm">大模型接入</a>
+      <a href="#echomemory">EchoMemory 对接</a>
+      <a href="#context">上下文拼接</a>
+      <a href="#chat-flow">会话流程</a>
+      <a href="#api">接口设计</a>
+      <a href="#files">文件规划</a>
+      <a href="#tests">验收</a>
+    </nav>
+
+    <section class="section" id="goals">
+      <h2>1. 改造目标</h2>
+      <p>
+        当前 echomem-agent 更像 EchoMemory HTTP API 的 playground：页面负责发起 session open、add message、add ref、commit，
+        assistant 回复仍主要依赖手工输入。下一阶段要把它升级成真正的 Agent Chat Runtime。
+      </p>
+      <div class="grid">
+        <div class="card">
+          <span class="tag blue">配置开放</span>
+          <h3>运行参数不写死</h3>
+          <p>EchoMemory 地址、模型 provider、base URL、model、temperature、上下文预算、检索开关和 session 策略全部由配置决定。</p>
+        </div>
+        <div class="card">
+          <span class="tag green">真实模型</span>
+          <h3>接入本机 OpenClaw</h3>
+          <p>通过 OpenAI-compatible chat completions 协议对接本机 OpenClaw 中已配置好的大模型，避免在 agent 内绑定特定 SDK。</p>
+        </div>
+        <div class="card">
+          <span class="tag purple">标准 Agent</span>
+          <h3>检索增强上下文</h3>
+          <p>每轮用户输入先写入 EchoMemory session，再调用 Retrieval API，按 system、memory、history、user 的顺序拼接上下文并调用模型。</p>
+        </div>
+      </div>
+      <div class="callout">
+        设计约束：echomem-agent 仍保持独立工程边界，不 import <code>echomem.*</code> 内部模块，只通过 EchoMemory HTTP API 通信。
+      </div>
+    </section>
+
+    <section class="section" id="config">
+      <h2>2. 开放配置设计</h2>
+      <p>
+        工程需要支持配置文件、环境变量和启动参数三层输入。优先级从高到低为：命令行参数、环境变量、配置文件、默认值。
+        配置应放在 agent 工程内，不依赖 EchoMemory workspace 的内部配置。
+      </p>
+
+      <h3>配置文件建议</h3>
+      <pre><code>configs/agent.local.json
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8765
+  },
+  "echomemory": {
+    "base_url": "http://127.0.0.1:8011",
+    "timeout_seconds": 15
+  },
+  "model": {
+    "provider": "openai_compatible",
+    "base_url": "http://127.0.0.1:xxxx/v1",
+    "api_key": "从环境变量读取时可留空",
+    "model": "openclaw-default",
+    "temperature": 0.3,
+    "max_tokens": 1024,
+    "timeout_seconds": 60
+  },
+  "chat": {
+    "system_prompt": "你是一个接入 EchoMemory 的任务型 Agent。",
+    "history_turns": 8,
+    "retrieval_enabled": true,
+    "retrieval_limit": 6,
+    "auto_commit": "manual",
+    "context_budget_tokens": 12000
+  }
+}</code></pre>
+
+      <h3>环境变量</h3>
+      <table>
+        <tr><th>变量</th><th>作用</th><th>示例</th></tr>
+        <tr><td><code>AGENT_CONFIG</code></td><td>配置文件路径。</td><td><code>configs/agent.local.json</code></td></tr>
+        <tr><td><code>ECHOMEM_URL</code></td><td>覆盖 EchoMemory 服务地址。</td><td><code>http://127.0.0.1:8011</code></td></tr>
+        <tr><td><code>OPENAI_BASE_URL</code></td><td>OpenAI-compatible 模型服务地址，可指向本机 OpenClaw。</td><td><code>http://127.0.0.1:xxxx/v1</code></td></tr>
+        <tr><td><code>OPENAI_API_KEY</code></td><td>模型 API key；本地服务若不校验也保留字段。</td><td><code>local-key</code></td></tr>
+        <tr><td><code>OPENAI_MODEL</code></td><td>模型名称。</td><td><code>openclaw-default</code></td></tr>
+      </table>
+
+      <div class="callout warn">
+        OpenClaw 已在本机配置可用时，agent 不应该复制或解析 OpenClaw 的内部配置文件。推荐只读取 OpenClaw 暴露的
+        OpenAI-compatible endpoint、model 名称和 key，把它当作标准模型服务调用。
+      </div>
+    </section>
+
+    <section class="section" id="llm">
+      <h2>3. 大模型接入方式</h2>
+      <p>
+        模型层抽象成 <code>ChatModelClient</code>，默认实现为 <code>OpenAICompatibleChatClient</code>。
+        这样本机 OpenClaw、OpenAI-compatible 网关、后续真实 OpenAI API 或其它兼容服务都可以走同一个协议。
+      </p>
+
+      <pre><code>class ChatModelClient(Protocol):
+    def complete(self, request: ChatCompletionRequest) -> ChatCompletionResult:
+        ...
+
+@dataclass(frozen=True)
+class ChatCompletionRequest:
+    messages: tuple[ChatMessage, ...]
+    model: str
+    temperature: float
+    max_tokens: int
+
+@dataclass(frozen=True)
+class ChatCompletionResult:
+    content: str
+    raw: Mapping[str, Any]</code></pre>
+
+      <h3>HTTP 调用契约</h3>
+      <pre><code>POST {model.base_url}/chat/completions
+Authorization: Bearer {model.api_key}
+Content-Type: application/json
+
+{
+  "model": "openclaw-default",
+  "messages": [
+    {"role": "system", "content": "..."},
+    {"role": "user", "content": "..."}
+  ],
+  "temperature": 0.3,
+  "max_tokens": 1024
+}</code></pre>
+
+      <p>
+        第一阶段只要求 non-streaming 响应，后续再扩展 SSE streaming。模型调用失败时，Agent 应返回结构化错误，
+        不应该写入 assistant message；用户消息是否保留由 session 策略决定。
+      </p>
+    </section>
+
+    <section class="section" id="echomemory">
+      <h2>4. EchoMemory 标准对接</h2>
+      <p>
+        echomem-agent 只调用 EchoMemory 对外 HTTP API，不 import runtime、service、filesystem 等内部类。核心接口分为两组：
+        session 写入接口和 retrieval 召回接口。
+      </p>
+
+      <table>
+        <tr><th>动作</th><th>EchoMemory API</th><th>Agent 使用方式</th></tr>
+        <tr>
+          <td>打开会话</td>
+          <td><code>POST /api/sessions/open</code></td>
+          <td>新建 chat 或首次收到消息时调用，获得稳定 scope。</td>
+        </tr>
+        <tr>
+          <td>写入用户消息</td>
+          <td><code>POST /api/sessions/{session_id}/messages</code></td>
+          <td>每轮用户输入先写入 session，role 为 <code>user</code>。</td>
+        </tr>
+        <tr>
+          <td>检索上下文</td>
+          <td><code>POST /api/retrieval/search</code></td>
+          <td>使用当前 query、user_id、agent_id、session_id 获取上下文候选。</td>
+        </tr>
+        <tr>
+          <td>写入助手回复</td>
+          <td><code>POST /api/sessions/{session_id}/messages</code></td>
+          <td>模型成功返回后写入 assistant message。</td>
+        </tr>
+        <tr>
+          <td>附加工具结果</td>
+          <td><code>POST /api/sessions/{session_id}/refs</code></td>
+          <td>工具调用、检索证据、外部文件摘要等作为 ref 写入。</td>
+        </tr>
+        <tr>
+          <td>归档提交</td>
+          <td><code>POST /api/sessions/{session_id}/commit</code></td>
+          <td>手动、轮次阈值或会话结束时 commit，触发 memory engine 消费。</td>
+        </tr>
+      </table>
+
+      <h3>Retrieval 请求示例</h3>
+      <pre><code>POST /api/retrieval/search
+{
+  "query": "用户这次想让我怎么整理文档？",
+  "user_id": "alice",
+  "agent_id": "demo-agent",
+  "session_id": "chat-001",
+  "limit": 6,
+  "include_explain": true
+}</code></pre>
+    </section>
+
+    <section class="section" id="context">
+      <h2>5. 标准 Agent 上下文拼接</h2>
+      <p>
+        上下文拼接由 <code>ContextBuilder</code> 负责。它不直接调用模型，也不直接写 session，只接收当前会话状态、检索结果和用户输入，
+        输出符合 chat completions 协议的 messages。
+      </p>
+
+      <div class="flow">
+        <div class="step">1. System<span>固定角色、能力边界、输出规范。</span></div>
+        <div class="step">2. Developer<span>工程级策略、工具说明、EchoMemory 使用约束。</span></div>
+        <div class="step">3. Memory<span>来自 RetrievalService 的 ContextItem，按来源和 kind 分组。</span></div>
+        <div class="step">4. History<span>最近 N 轮 user/assistant 消息，受 token budget 约束。</span></div>
+        <div class="step">5. Tool Context<span>当前轮工具结果或 refs 摘要。</span></div>
+        <div class="step">6. User<span>当前用户原始输入，永远放在最后。</span></div>
+      </div>
+
+      <h3>拼接模板</h3>
+      <pre><code>[
+  {"role": "system", "content": chat.system_prompt},
+  {"role": "developer", "content": "你可以使用 EchoMemory 检索结果，但不得编造未给出的证据。"},
+  {
+    "role": "system",
+    "content": "&lt;memory&gt;\n- [preference/simple] 用户喜欢简洁技术文档\n&lt;/memory&gt;"
+  },
+  {"role": "user", "content": "上一轮用户消息"},
+  {"role": "assistant", "content": "上一轮助手回复"},
+  {"role": "user", "content": "当前用户输入"}
+]</code></pre>
+
+      <h3>上下文预算规则</h3>
+      <ul>
+        <li>优先保留 system/developer/current user，不允许被截断。</li>
+        <li>memory item 按 score、kind、recency 和 evidence 完整度排序，超过预算时从低优先级裁剪。</li>
+        <li>history 只保留最近 N 轮；如果仍超预算，先摘要早期 history，再裁剪。</li>
+        <li>retrieval explain 仅进入调试输出，不默认进入模型上下文。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="chat-flow">
+      <h2>6. 会话主流程</h2>
+      <pre><code>User submit message
+  -> AgentChatService.ensure_session(user_id, agent_id, session_id)
+  -> EchoMemory POST /api/sessions/{id}/messages role=user
+  -> EchoMemory POST /api/retrieval/search
+  -> ContextBuilder.build(system + memory + history + current user)
+  -> ChatModelClient.complete(messages)
+  -> EchoMemory POST /api/sessions/{id}/messages role=assistant
+  -> 按策略决定是否 commit
+  -> 返回 assistant content、retrieval items、session status</code></pre>
+
+      <p>
+        这个流程把 EchoMemory 当作 Agent 的长期记忆和会话事实源，把 OpenClaw/LLM 当作推理生成器。Agent 自身负责 orchestration，
+        不把记忆写入、检索路由、memory engine 细节耦合进模型调用层。
+      </p>
+    </section>
+
+    <section class="section" id="api">
+      <h2>7. Agent 工程对外接口</h2>
+      <p>
+        Agent server 面向前端提供更高层的 chat API，内部再调用 EchoMemory 和模型。这样页面不用手工发 session/retrieval/model 多个请求。
+      </p>
+
+      <table>
+        <tr><th>接口</th><th>说明</th><th>是否代理 EchoMemory</th></tr>
+        <tr><td><code>GET /</code></td><td>Agent Chat 页面。</td><td>否</td></tr>
+        <tr><td><code>GET /agent/config</code></td><td>返回脱敏后的当前配置。</td><td>否</td></tr>
+        <tr><td><code>POST /agent/chat</code></td><td>标准 Agent 一轮对话：写 user、检索、拼上下文、调模型、写 assistant。</td><td>间接调用</td></tr>
+        <tr><td><code>POST /agent/session/commit</code></td><td>显式提交当前 session。</td><td>是</td></tr>
+        <tr><td><code>/api/**</code></td><td>保留向 EchoMemory 的低层代理能力，便于调试。</td><td>是</td></tr>
+        <tr><td><code>/agent/inspect/**</code></td><td>只读观察 EchoMemory 状态。</td><td>是</td></tr>
+      </table>
+
+      <h3><code>POST /agent/chat</code> 请求与响应</h3>
+      <pre><code>POST /agent/chat
+{
+  "user_id": "alice",
+  "agent_id": "demo-agent",
+  "session_id": "chat-001",
+  "message": "帮我整理 D03 的提交方案",
+  "stream": false
+}
+
+200 OK
+{
+  "session_id": "chat-001",
+  "assistant": {
+    "role": "assistant",
+    "content": "..."
+  },
+  "retrieval": {
+    "items": [...],
+    "explain": {...}
+  },
+  "model": {
+    "provider": "openai_compatible",
+    "model": "openclaw-default"
+  }
+}</code></pre>
+    </section>
+
+    <section class="section" id="files">
+      <h2>8. 文件与模块规划</h2>
+      <pre><code>echomem-agent/
+├── configs/
+│   └── agent.local.example.json
+├── docs/
+│   └── design/
+│       └── agent/
+│           ├── webserver.html
+│           └── chat-design.html
+├── src/
+│   └── agent/
+│       ├── config.py              # 配置加载、环境变量覆盖、脱敏输出
+│       ├── echomemory_client.py   # EchoMemory HTTP client
+│       ├── model_client.py        # OpenAI-compatible / OpenClaw client
+│       ├── context_builder.py     # 标准 Agent 上下文拼接
+│       ├── chat_service.py        # 单轮 Agent orchestration
+│       └── server.py              # HTTP routes + UI
+└── tests/
+    ├── test_config.py
+    ├── test_context_builder.py
+    ├── test_chat_service.py
+    └── test_agent_server.py</code></pre>
+
+      <table>
+        <tr><th>模块</th><th>职责</th><th>边界</th></tr>
+        <tr><td><code>config.py</code></td><td>读取 JSON、环境变量和 CLI override。</td><td>不创建模型和 HTTP client。</td></tr>
+        <tr><td><code>echomemory_client.py</code></td><td>封装 session、retrieval、commit HTTP API。</td><td>不 import echomem 内部模块。</td></tr>
+        <tr><td><code>model_client.py</code></td><td>调用 OpenAI-compatible chat completions。</td><td>不拼接业务上下文。</td></tr>
+        <tr><td><code>context_builder.py</code></td><td>按标准 Agent 消息顺序构造 messages。</td><td>不发 HTTP，不调用模型。</td></tr>
+        <tr><td><code>chat_service.py</code></td><td>串联 session 写入、retrieval、context、LLM、assistant 写入。</td><td>不直接读写 EchoMemory 文件系统。</td></tr>
+      </table>
+    </section>
+
+    <section class="section" id="tests">
+      <h2>9. 验收标准</h2>
+      <table>
+        <tr><th>用例</th><th>验证点</th></tr>
+        <tr>
+          <td><code>test_agent_loads_open_config</code></td>
+          <td>配置文件、环境变量和 CLI override 能合并；敏感字段在 <code>/agent/config</code> 中脱敏。</td>
+        </tr>
+        <tr>
+          <td><code>test_model_client_calls_openai_compatible_endpoint</code></td>
+          <td>模型 client 使用标准 <code>/v1/chat/completions</code> 请求格式，可指向本机 OpenClaw。</td>
+        </tr>
+        <tr>
+          <td><code>test_chat_uses_echomemory_session_api</code></td>
+          <td>一轮 chat 必须调用 session open/add user/add assistant，不绕过 EchoMemory。</td>
+        </tr>
+        <tr>
+          <td><code>test_chat_uses_retrieval_before_model</code></td>
+          <td>模型调用前必须调用 <code>/api/retrieval/search</code>，并把返回 items 放入上下文。</td>
+        </tr>
+        <tr>
+          <td><code>test_context_builder_orders_messages</code></td>
+          <td>上下文顺序固定为 system、developer、memory、history、tool、current user。</td>
+        </tr>
+        <tr>
+          <td><code>test_chat_does_not_write_assistant_on_model_failure</code></td>
+          <td>模型失败时返回错误，不写入伪造 assistant 消息。</td>
+        </tr>
+      </table>
+
+      <div class="callout">
+        完成标准：启动 echomem-agent 后，用户在页面发送消息，Agent 能自动写入 EchoMemory session、召回历史/偏好、
+        拼接标准 chat messages、调用本机 OpenClaw 模型、写回 assistant 消息，并可手动或按策略 commit session。
+      </div>
+    </section>
+  </div>
+</body>
+</html>
