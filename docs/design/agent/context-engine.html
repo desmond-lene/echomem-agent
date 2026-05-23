@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EchoMem Agent Context Engine 设计</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #5f6f86;
+      --paper: #fbfcff;
+      --line: #d9e2ef;
+      --blue: #2458c7;
+      --blue-soft: #edf4ff;
+      --green: #17734f;
+      --green-soft: #edf8f2;
+      --orange: #a15b16;
+      --orange-soft: #fff5e9;
+      --purple: #6541a8;
+      --purple-soft: #f5efff;
+      --red: #a43b3b;
+      --red-soft: #fff1f1;
+      --gray-soft: #f3f6fb;
+      --shadow: 0 10px 28px rgba(24, 42, 80, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #f4f7fb;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.62;
+      letter-spacing: 0;
+    }
+
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: var(--gray-soft);
+      color: #26364f;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 0;
+      padding: 14px;
+      border-radius: 8px;
+      background: #111827;
+      color: #e5e7eb;
+      line-height: 1.55;
+    }
+
+    pre code { padding: 0; background: transparent; color: inherit; }
+
+    .page {
+      width: min(1380px, calc(100% - 36px));
+      margin: 0 auto 56px;
+    }
+
+    header {
+      padding: 38px 0 22px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 62px);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      width: min(980px, 100%);
+      margin: 18px auto 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: white;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .toc {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      padding: 12px 0;
+      background: rgba(244, 247, 251, 0.92);
+      backdrop-filter: blur(8px);
+    }
+
+    .toc a {
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: white;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .section {
+      margin-top: 18px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      box-shadow: var(--shadow);
+    }
+
+    h2 { margin: 0 0 12px; font-size: 26px; }
+    h3 { margin: 20px 0 8px; font-size: 18px; }
+    p { margin: 8px 0; color: #334155; }
+    ul { margin: 8px 0 0 20px; padding: 0; color: #334155; }
+    li { margin: 5px 0; }
+
+    .lead {
+      color: #475569;
+      font-size: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .card {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .card h3 { margin-top: 0; }
+    .card p { color: var(--muted); }
+
+    .tag {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .blue { color: var(--blue); background: var(--blue-soft); }
+    .green { color: var(--green); background: var(--green-soft); }
+    .orange { color: var(--orange); background: var(--orange-soft); }
+    .purple { color: var(--purple); background: var(--purple-soft); }
+    .red { color: var(--red); background: var(--red-soft); }
+
+    table {
+      width: 100%;
+      margin-top: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      border-collapse: collapse;
+      background: white;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #edf3fb;
+      color: #26364d;
+      font-size: 13px;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .callout {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid #bcd0ff;
+      border-radius: 8px;
+      background: var(--blue-soft);
+      color: #1e3a8a;
+    }
+
+    .warn {
+      border-color: #ffd3a3;
+      background: var(--orange-soft);
+      color: #8a4b12;
+    }
+
+    .danger {
+      border-color: #ffc4c4;
+      background: var(--red-soft);
+      color: #8f2f2f;
+    }
+
+    .stack {
+      display: grid;
+      grid-template-columns: 140px minmax(0, 1fr) 170px;
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 14px;
+    }
+
+    .layer {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+    }
+
+    .layer strong { display: block; margin-bottom: 4px; }
+    .layer span { color: var(--muted); font-size: 13px; }
+
+    footer {
+      margin-top: 24px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+    }
+
+    @media (max-width: 960px) {
+      .grid, .two-col, .stack { grid-template-columns: 1fr; }
+      .section { padding: 18px; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">EchoMem Agent / Context Engine Design</p>
+      <h1>EchoMem Agent Context Engine</h1>
+      <p class="subtitle">
+        本文定义 echomem-agent 的上下文工程方案：把稳定规则、任务环境、记忆检索、会话历史、工具观察和当前请求组织成可缓存、可压缩、可解释、可演进的 Agent 上下文。
+      </p>
+      <div class="meta-row">
+        <span class="pill">目标：通用任务型 Agent</span>
+        <span class="pill">文档：docs/design/agent/context-engine.html</span>
+        <span class="pill">重点：顺序、预算、缓存、记忆</span>
+        <span class="pill">参考：OpenClaw / Hermes / Prompt Caching</span>
+      </div>
+    </header>
+
+    <nav class="toc">
+      <a href="#goal">目标</a>
+      <a href="#phases">阶段</a>
+      <a href="#principles">原则</a>
+      <a href="#components">组成</a>
+      <a href="#order">顺序</a>
+      <a href="#layers">分层</a>
+      <a href="#lifecycle">生命周期</a>
+      <a href="#budget">预算</a>
+      <a href="#retrieval">检索</a>
+      <a href="#tools">工具</a>
+      <a href="#security">安全</a>
+      <a href="#implementation">落地</a>
+      <a href="#references">参考</a>
+    </nav>
+
+    <section class="section" id="goal">
+      <h2>1. 设计目标</h2>
+      <p class="lead">
+        Context Engine 是 Agent 的“工作记忆编排器”。它不只是把字符串拼起来，而是决定模型每一轮能看见什么、先看见什么、哪些内容能复用缓存、哪些内容必须被检索、哪些内容只能作为调试信息保留。
+      </p>
+      <div class="grid">
+        <article class="card">
+          <span class="tag blue">通用任务能力</span>
+          <h3>覆盖多类任务</h3>
+          <p>支持问答、代码、文档、计划、工具调用、多步执行、长期项目协作。上下文必须能表达目标、约束、证据、状态和下一步动作。</p>
+        </article>
+        <article class="card">
+          <span class="tag green">长期记忆接入</span>
+          <h3>EchoMemory 原生</h3>
+          <p>把 EchoMemory 当作事实和记忆来源，通过 session、retrieval、refs、commit 形成闭环，不在 Agent 侧复制一套隐式记忆系统。</p>
+        </article>
+        <article class="card">
+          <span class="tag purple">缓存友好</span>
+          <h3>稳定前缀优先</h3>
+          <p>借鉴 Prompt Caching 思路，把不变内容放在前面，把时间、检索结果、工具结果和当前用户输入放在后面，减少重复推理成本。</p>
+        </article>
+      </div>
+      <div class="callout">
+        核心判断：Agent 能不能“完成各类任务”，很大程度取决于上下文能否稳定表达任务环境，并在动态信息进入时不冲散长期规则和关键目标。
+      </div>
+    </section>
+
+    <section class="section" id="phases">
+      <h2>2. 阶段划分</h2>
+      <p class="lead">
+        Context Engine 不一次性做成全能力系统。第一阶段只服务当前“纯对话 Agent”：用户发消息，Agent 结合系统规则、会话历史和 EchoMemory 检索结果回答。工具、工作区状态、复杂任务计划和多 Agent 协作都放到后续阶段。
+      </p>
+      <table>
+        <thead>
+          <tr><th>阶段</th><th>目标</th><th>启用上下文</th><th>暂不包含</th><th>完成标准</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Phase 1：纯对话 Agent</td>
+            <td>让 echomem-agent 成为稳定的记忆增强聊天 Agent。</td>
+            <td>Agent Charter、Behavior Policy、Memory Contract、Session State、Retrieved Memory、Conversation Tail、Current Request。</td>
+            <td>工具调用、工作区扫描、任务计划、自动摘要、refs 写入策略、复杂 commit 策略。</td>
+            <td>每轮能写入用户消息、检索 EchoMemory、按稳定顺序组装 messages、调用模型、写入 assistant 回复。</td>
+          </tr>
+          <tr>
+            <td>Phase 2：长对话与摘要</td>
+            <td>支持较长会话持续进行，不因历史过长而丢失关键决策。</td>
+            <td>新增 Session Summary、Task State、token budget、context debug trace。</td>
+            <td>外部工具执行和工作区状态仍不进入模型。</td>
+            <td>超过历史预算时生成摘要，保留目标、偏好、关键事实、未完成事项。</td>
+          </tr>
+          <tr>
+            <td>Phase 3：工具与任务执行</td>
+            <td>从聊天扩展为能完成任务的 Agent。</td>
+            <td>新增 Tool Contract、Tool Observations、Task Plan、重要 refs 写入。</td>
+            <td>多 Agent 协作和复杂权限模型。</td>
+            <td>工具结果结构化进入上下文，重要证据写入 EchoMemory refs，失败可解释。</td>
+          </tr>
+          <tr>
+            <td>Phase 4：通用任务工作台</td>
+            <td>面向代码、文档、研究、自动化等多类任务形成完整上下文系统。</td>
+            <td>新增 Project Profile、Workspace State、跨任务记忆、阶段性 commit 策略。</td>
+            <td>不追求把所有历史全文塞进模型。</td>
+            <td>Agent 能在长任务中恢复状态、引用证据、管理工具结果，并保持稳定前缀缓存友好。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        当前实现应优先落 Phase 1。后续章节描述的是完整 Context Engine，但每个组件都要标注它属于哪个阶段，避免第一版为了未来能力过度设计。
+      </div>
+    </section>
+
+    <section class="section" id="principles">
+      <h2>3. 设计原则</h2>
+      <table>
+        <thead>
+          <tr><th>原则</th><th>要求</th><th>原因</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>稳定内容前置</td>
+            <td>角色、行为准则、工具契约、输出规范、记忆使用规则放在上下文最前面。</td>
+            <td>这些内容跨轮次变化少，最适合作为可缓存前缀。</td>
+          </tr>
+          <tr>
+            <td>动态内容后置</td>
+            <td>时间戳、当前请求、检索结果、工作区快照、工具结果放在后段。</td>
+            <td>这些内容高频变化，提前出现会破坏缓存命中，也会让稳定规则被稀释。</td>
+          </tr>
+          <tr>
+            <td>证据优先于回忆</td>
+            <td>检索结果必须保留来源、时间、置信度和用途；模型不能把低置信记忆当事实。</td>
+            <td>任务型 Agent 的可靠性来自可追溯证据，而不只是流畅回答。</td>
+          </tr>
+          <tr>
+            <td>历史可压缩</td>
+            <td>会话历史分为近期原文、阶段摘要、已完成决策、未完成待办。</td>
+            <td>长任务不能无限保留全文，需要保留“可继续工作”的最小状态。</td>
+          </tr>
+          <tr>
+            <td>工具结果结构化</td>
+            <td>工具观察进入专门区域，不混进自然语言历史；重要结果写入 EchoMemory refs。</td>
+            <td>工具结果是状态变更和证据，不应被普通聊天文本吞没。</td>
+          </tr>
+          <tr>
+            <td>上下文可解释</td>
+            <td>每轮输出可开启 debug 视图，展示哪些 memory、history、tools 被放入模型。</td>
+            <td>上下文错误通常比模型错误更隐蔽，需要可观察。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="components">
+      <h2>4. 上下文由哪些部分组成</h2>
+      <p class="lead">
+        echomem-agent 的上下文被拆成 12 个组件，但不会在第一阶段全部启用。Phase 1 只启用纯对话必需层；其余组件作为后续阶段的扩展点保留。
+      </p>
+      <table>
+        <thead>
+          <tr><th>#</th><th>组件</th><th>内容</th><th>阶段</th><th>稳定性</th><th>推荐 role</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>Agent Charter</td>
+            <td>身份、目标、边界、语言偏好、不可做事项。</td>
+            <td>Phase 1</td>
+            <td>几乎不变</td>
+            <td><code>system</code></td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Behavior Policy</td>
+            <td>事实性要求、安全要求、遇到不确定性时的处理方式。</td>
+            <td>Phase 1</td>
+            <td>几乎不变</td>
+            <td><code>system</code></td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Tool Contract</td>
+            <td>可用工具、调用约束、工具结果解释规则、失败重试规则。</td>
+            <td>Phase 3</td>
+            <td>低频变化</td>
+            <td><code>developer</code> 或工具 schema</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>Memory Contract</td>
+            <td>如何使用 EchoMemory：检索结果只是候选证据，冲突时如何处理，何时写 refs 和 commit。</td>
+            <td>Phase 1</td>
+            <td>低频变化</td>
+            <td><code>developer</code></td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>Project Profile</td>
+            <td>仓库、产品、用户偏好、团队约定、当前 Agent 配置。</td>
+            <td>Phase 4</td>
+            <td>中频变化</td>
+            <td><code>system</code> 或 <code>developer</code></td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>Session State</td>
+            <td>user_id、agent_id、session_id、当前任务阶段、未完成目标。</td>
+            <td>Phase 1</td>
+            <td>每会话变化</td>
+            <td><code>system</code></td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>Task Plan</td>
+            <td>当前任务的步骤、状态、阻塞点、验收标准。</td>
+            <td>Phase 2 / Phase 3</td>
+            <td>每轮可能变化</td>
+            <td><code>system</code> 或 <code>assistant</code> 摘要</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>Retrieved Memory</td>
+            <td>EchoMemory 检索到的偏好、事实、历史决策、外部引用。</td>
+            <td>Phase 1</td>
+            <td>每轮变化</td>
+            <td><code>system</code></td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>Workspace State</td>
+            <td>文件树、打开文件、git 状态、测试结果、运行环境。</td>
+            <td>Phase 4</td>
+            <td>每轮变化</td>
+            <td><code>system</code></td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>Tool Observations</td>
+            <td>工具调用结果、错误、日志片段、网页或文件摘要。</td>
+            <td>Phase 3</td>
+            <td>高频变化</td>
+            <td><code>tool</code> 或 <code>system</code> 摘要</td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>Conversation Tail</td>
+            <td>最近 N 轮 user/assistant 原文，保留语气和上下文连贯性。</td>
+            <td>Phase 1</td>
+            <td>高频变化</td>
+            <td><code>user</code> / <code>assistant</code></td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>Current Request</td>
+            <td>用户本轮原始输入和附件入口。</td>
+            <td>Phase 1</td>
+            <td>每轮必变</td>
+            <td><code>user</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="order">
+      <h2>5. 推荐上下文顺序</h2>
+      <p class="lead">
+        顺序不是排版问题，而是模型注意力、缓存命中率和任务稳定性的共同约束。推荐顺序遵循“越稳定越靠前、越具体越靠后、当前用户输入永远最后”。
+      </p>
+
+      <h3>Phase 1 顺序：纯对话 Agent</h3>
+      <table>
+        <thead>
+          <tr><th>顺序</th><th>上下文层</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Agent Charter</td><td>固定身份、目标、边界和输出风格。</td></tr>
+          <tr><td>2</td><td>Behavior Policy</td><td>事实性、安全、未知处理、引用规则。</td></tr>
+          <tr><td>3</td><td>Memory Contract</td><td>说明 EchoMemory 检索结果如何使用、如何处理冲突。</td></tr>
+          <tr><td>4</td><td>Session State</td><td>user_id、agent_id、session_id、时间戳等动态会话信息。</td></tr>
+          <tr><td>5</td><td>Retrieved Memory</td><td>本轮检索到的偏好、事实和历史上下文。</td></tr>
+          <tr><td>6</td><td>Conversation Tail</td><td>最近 N 轮 user/assistant 原文。</td></tr>
+          <tr><td>7</td><td>Current Request</td><td>当前用户原始输入，永远放最后。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>完整阶段顺序：Phase 2+</h3>
+
+      <div class="stack">
+        <div class="layer"><strong>缓存前缀</strong><span>跨轮复用</span></div>
+        <div class="layer">
+          <strong>1. Agent Charter</strong>
+          <span>身份、目标、边界、输出风格。不要放时间、用户问题、检索结果。</span>
+        </div>
+        <div class="layer"><strong>system</strong><span>强约束</span></div>
+
+        <div class="layer"><strong>缓存前缀</strong><span>跨轮复用</span></div>
+        <div class="layer">
+          <strong>2. Behavior Policy</strong>
+          <span>事实性、安全、引用、未知处理、任务完成标准。</span>
+        </div>
+        <div class="layer"><strong>system</strong><span>强约束</span></div>
+
+        <div class="layer"><strong>缓存前缀</strong><span>低频变化</span></div>
+        <div class="layer">
+          <strong>3. Tool Contract + Memory Contract</strong>
+          <span>工具和 EchoMemory 的使用契约。工具 schema 若由 API 单独承载，则 prompt 中只保留解释规则。</span>
+        </div>
+        <div class="layer"><strong>developer</strong><span>工程约束</span></div>
+
+        <div class="layer"><strong>准静态</strong><span>按项目刷新</span></div>
+        <div class="layer">
+          <strong>4. Project Profile</strong>
+          <span>仓库结构、产品定位、团队偏好、用户长期偏好摘要。</span>
+        </div>
+        <div class="layer"><strong>system</strong><span>背景</span></div>
+
+        <div class="layer"><strong>动态状态</strong><span>每会话变化</span></div>
+        <div class="layer">
+          <strong>5. Session State + Task Plan</strong>
+          <span>当前会话、任务目标、阶段、未完成事项、验收标准。</span>
+        </div>
+        <div class="layer"><strong>system</strong><span>状态</span></div>
+
+        <div class="layer"><strong>动态证据</strong><span>每轮变化</span></div>
+        <div class="layer">
+          <strong>6. Retrieved Memory</strong>
+          <span>按 relevance、recency、kind 分组的 EchoMemory 检索结果，带来源和置信度。</span>
+        </div>
+        <div class="layer"><strong>system</strong><span>证据</span></div>
+
+        <div class="layer"><strong>动态证据</strong><span>每轮变化</span></div>
+        <div class="layer">
+          <strong>7. Workspace State + Tool Observations</strong>
+          <span>文件、命令、网页、测试、工具调用结果。只放摘要和关键片段。</span>
+        </div>
+        <div class="layer"><strong>tool/system</strong><span>观察</span></div>
+
+        <div class="layer"><strong>近期对话</strong><span>高频变化</span></div>
+        <div class="layer">
+          <strong>8. Conversation Tail</strong>
+          <span>最近若干轮原文，早期历史由 Session Summary 承担。</span>
+        </div>
+        <div class="layer"><strong>user/assistant</strong><span>连续性</span></div>
+
+        <div class="layer"><strong>当前输入</strong><span>每轮必变</span></div>
+        <div class="layer">
+          <strong>9. Current Request</strong>
+          <span>用户本轮原始请求。它必须是最后一个用户消息，避免后续内容稀释指令。</span>
+        </div>
+        <div class="layer"><strong>user</strong><span>任务触发</span></div>
+      </div>
+
+      <div class="callout warn">
+        当前 <code>src/agent/context_builder.py</code> 把 <code>timestamp_utc</code> 放在前段 <code>runtime_context</code> 中。正式 Context Engine 应把时间戳、session_id 等动态字段移到靠后的 Session State 区域，避免每轮破坏静态前缀缓存。
+      </div>
+    </section>
+
+    <section class="section" id="layers">
+      <h2>6. 分层格式</h2>
+      <p class="lead">
+        每一层都用明确标签包裹，减少模型误读。标签不是为了炫技，而是为了让裁剪、调试、摘要和评估都能定位上下文来源。
+      </p>
+      <pre><code>[
+  {
+    "role": "system",
+    "content": "&lt;agent_charter version=\"2026-05-23\"&gt;...&lt;/agent_charter&gt;"
+  },
+  {
+    "role": "system",
+    "content": "&lt;behavior_policy version=\"2026-05-23\"&gt;...&lt;/behavior_policy&gt;"
+  },
+  {
+    "role": "developer",
+    "content": "&lt;tool_contract&gt;...&lt;/tool_contract&gt;\n&lt;memory_contract&gt;...&lt;/memory_contract&gt;"
+  },
+  {
+    "role": "system",
+    "content": "&lt;project_profile freshness=\"daily\"&gt;...&lt;/project_profile&gt;"
+  },
+  {
+    "role": "system",
+    "content": "&lt;session_state&gt;...&lt;/session_state&gt;\n&lt;task_plan&gt;...&lt;/task_plan&gt;"
+  },
+  {
+    "role": "system",
+    "content": "&lt;retrieved_memory query_id=\"...\"&gt;...&lt;/retrieved_memory&gt;"
+  },
+  {
+    "role": "system",
+    "content": "&lt;workspace_state&gt;...&lt;/workspace_state&gt;\n&lt;tool_observations&gt;...&lt;/tool_observations&gt;"
+  },
+  {"role": "user", "content": "上一轮用户消息"},
+  {"role": "assistant", "content": "上一轮助手回复"},
+  {"role": "user", "content": "当前用户请求"}
+]</code></pre>
+
+      <h3>标签规范</h3>
+      <table>
+        <thead>
+          <tr><th>标签</th><th>是否可缓存</th><th>裁剪策略</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>&lt;agent_charter&gt;</code></td><td>是</td><td>不可裁剪，只能版本升级。</td></tr>
+          <tr><td><code>&lt;behavior_policy&gt;</code></td><td>是</td><td>不可裁剪，只能版本升级。</td></tr>
+          <tr><td><code>&lt;tool_contract&gt;</code></td><td>是</td><td>按可用工具集合生成，工具很多时只保留当前任务相关工具。</td></tr>
+          <tr><td><code>&lt;memory_contract&gt;</code></td><td>是</td><td>不可裁剪，保持短小。</td></tr>
+          <tr><td><code>&lt;project_profile&gt;</code></td><td>部分</td><td>每日或仓库变更后刷新，过长时转为摘要。</td></tr>
+          <tr><td><code>&lt;session_state&gt;</code></td><td>否</td><td>保留关键标识和阶段，不放冗长日志。</td></tr>
+          <tr><td><code>&lt;task_plan&gt;</code></td><td>否</td><td>保留未完成项、当前步骤和验收标准。</td></tr>
+          <tr><td><code>&lt;retrieved_memory&gt;</code></td><td>否</td><td>按分数和用途裁剪，保留来源。</td></tr>
+          <tr><td><code>&lt;workspace_state&gt;</code></td><td>否</td><td>只保留任务相关文件、变更、测试结果。</td></tr>
+          <tr><td><code>&lt;tool_observations&gt;</code></td><td>否</td><td>长输出摘要化，必要片段带行号或 URL。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="lifecycle">
+      <h2>7. 上下文生命周期</h2>
+      <p class="lead">
+        每一轮对话都应该经历同一条流水线，避免不同入口拼出不同上下文。
+      </p>
+      <pre><code>User request
+  -> classify task intent and risk
+  -> open or resume EchoMemory session
+  -> write current user message
+  -> load stable prefix by version
+  -> build project profile
+  -> retrieve EchoMemory candidates
+  -> inspect workspace and recent tool state
+  -> summarize long history if needed
+  -> allocate token budget by priority
+  -> assemble ordered messages
+  -> call model
+  -> write assistant message and important refs
+  -> optionally commit session
+  -> expose context debug trace</code></pre>
+      <div class="two-col">
+        <article class="card">
+          <span class="tag green">输入侧</span>
+          <h3>先写入，再检索</h3>
+          <p>用户本轮消息应先进入 EchoMemory session，再用当前问题检索。这样检索层能理解最新问题与已有会话的关系。</p>
+        </article>
+        <article class="card">
+          <span class="tag orange">输出侧</span>
+          <h3>先验证，再写入</h3>
+          <p>模型失败或工具失败时不要写入伪 assistant 成果。成功回答、工具证据、关键决策才写入 session 或 refs。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="budget">
+      <h2>8. Token 预算与裁剪</h2>
+      <p class="lead">
+        预算策略使用“硬保护 + 分层配额 + 降级摘要”。稳定规则和当前用户请求是硬保护，其他区域按价值裁剪。
+      </p>
+      <table>
+        <thead>
+          <tr><th>区域</th><th>默认占比</th><th>保护级别</th><th>超预算处理</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Agent Charter + Behavior Policy</td><td>8%</td><td>最高</td><td>不可裁剪。</td></tr>
+          <tr><td>Tool Contract + Memory Contract</td><td>10%</td><td>高</td><td>只保留当前可用工具和关键规则。</td></tr>
+          <tr><td>Project Profile</td><td>8%</td><td>中</td><td>压缩为项目摘要。</td></tr>
+          <tr><td>Session State + Task Plan</td><td>8%</td><td>高</td><td>保留目标、当前步骤、阻塞点。</td></tr>
+          <tr><td>Retrieved Memory</td><td>24%</td><td>中高</td><td>按相关性、时效、来源质量裁剪。</td></tr>
+          <tr><td>Workspace + Tool Observations</td><td>20%</td><td>中高</td><td>长日志摘要化，只保留错误和关键证据。</td></tr>
+          <tr><td>Conversation Tail</td><td>14%</td><td>中</td><td>保留最近 N 轮，早期历史合并为摘要。</td></tr>
+          <tr><td>Current Request</td><td>8%</td><td>最高</td><td>不可裁剪，附件另行摘要。</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        如果模型上下文窗口足够大，也不要无限塞入历史。Agent 需要的是“对当前任务有用的上下文”，不是“所有曾经出现过的文本”。
+      </div>
+    </section>
+
+    <section class="section" id="retrieval">
+      <h2>9. EchoMemory 检索设计</h2>
+      <p class="lead">
+        EchoMemory 返回的内容进入 <code>&lt;retrieved_memory&gt;</code>，并按用途分组。每条 memory 都必须说明它为什么被选入上下文。
+      </p>
+      <table>
+        <thead>
+          <tr><th>分组</th><th>用途</th><th>示例</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Preference</td>
+            <td>用户长期偏好、输出风格、协作习惯。</td>
+            <td>用户偏好中文、简洁、直接给可执行方案。</td>
+          </tr>
+          <tr>
+            <td>Project Fact</td>
+            <td>项目结构、历史设计决策、接口约束。</td>
+            <td>echomem-agent 不 import echomem.*，只通过 HTTP 访问 EchoMemory。</td>
+          </tr>
+          <tr>
+            <td>Task History</td>
+            <td>同一任务或相似任务的阶段、结论和未完成事项。</td>
+            <td>上一轮已经完成 model_client，下一步是 context_builder。</td>
+          </tr>
+          <tr>
+            <td>Evidence</td>
+            <td>文档、网页、测试、工具输出等可引用证据。</td>
+            <td>参考文章强调 Prompt Caching 需要把稳定 prompt 放在前缀。</td>
+          </tr>
+          <tr>
+            <td>Risk</td>
+            <td>失败记录、冲突事实、用户明确禁止事项。</td>
+            <td>不要覆盖用户未提交的本地改动。</td>
+          </tr>
+        </tbody>
+      </table>
+      <pre><code>&lt;retrieved_memory query_id="r-20260523-001"&gt;
+  &lt;item kind="project_fact" score="0.91" source="session:chat-001" recency="2026-05-21"&gt;
+    echomem-agent 是独立工程，只通过 EchoMemory HTTP API 通信。
+  &lt;/item&gt;
+  &lt;item kind="preference" score="0.84" source="profile:user" recency="long_term"&gt;
+    用户希望设计文档先讲不变部分，再讲动态上下文。
+  &lt;/item&gt;
+&lt;/retrieved_memory&gt;</code></pre>
+    </section>
+
+    <section class="section" id="tools">
+      <h2>10. 工具与多步任务上下文</h2>
+      <p class="lead">
+        面向通用任务的 Agent 必须能把工具调用纳入上下文循环。工具不是聊天内容，而是外部世界观察和状态变更。
+      </p>
+      <table>
+        <thead>
+          <tr><th>对象</th><th>进入上下文的方式</th><th>写入 EchoMemory 的条件</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>工具 schema</td>
+            <td>通过模型 API tools 字段承载；prompt 中只解释使用策略。</td>
+            <td>不写入，属于静态能力。</td>
+          </tr>
+          <tr>
+            <td>工具调用意图</td>
+            <td>作为 assistant tool call 或 task plan 的下一步。</td>
+            <td>重要决策或用户可见动作写入。</td>
+          </tr>
+          <tr>
+            <td>工具结果</td>
+            <td>短结果原文进入 <code>&lt;tool_observations&gt;</code>，长结果摘要化。</td>
+            <td>影响任务结论、包含证据或状态变更时写入 refs。</td>
+          </tr>
+          <tr>
+            <td>错误与重试</td>
+            <td>保留错误摘要、失败命令、已尝试路径。</td>
+            <td>阻塞性错误或用户需要知情时写入。</td>
+          </tr>
+          <tr>
+            <td>阶段摘要</td>
+            <td>多步任务每完成一个阶段生成 <code>&lt;task_plan&gt;</code> 摘要。</td>
+            <td>阶段完成、用户确认、会话 commit 时写入。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        参考 Hermes 一类 Agent 的做法，工具输出要和推理上下文分层：模型需要看见“结果是什么、是否可靠、下一步如何用”，不需要每次都看见完整日志。
+      </div>
+    </section>
+
+    <section class="section" id="security">
+      <h2>11. 安全与冲突处理</h2>
+      <p class="lead">
+        上下文会混合系统规则、用户输入、网页、文件和工具输出，因此必须显式处理冲突和注入。
+      </p>
+      <table>
+        <thead>
+          <tr><th>风险</th><th>规则</th><th>上下文表达</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Prompt injection</td>
+            <td>网页、文件、工具结果中的指令都只能当作数据，不能覆盖 system/developer。</td>
+            <td>工具观察用 <code>&lt;untrusted_content&gt;</code> 包裹。</td>
+          </tr>
+          <tr>
+            <td>记忆冲突</td>
+            <td>高置信新证据优先于旧记忆；冲突时向用户说明。</td>
+            <td>memory item 保留 source、recency、confidence。</td>
+          </tr>
+          <tr>
+            <td>敏感信息泄漏</td>
+            <td>API key、内部配置、绝对路径按需脱敏；除非任务需要，不放入模型。</td>
+            <td>ContextBuilder 先做 redaction，再组装 messages。</td>
+          </tr>
+          <tr>
+            <td>错误写入长期记忆</td>
+            <td>未经验证的模型推断不直接 commit 为长期事实。</td>
+            <td>写 refs 时标记 <code>kind=inference</code> 或 <code>kind=evidence</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="implementation">
+      <h2>12. 落地到 echomem-agent</h2>
+      <p class="lead">
+        当前工程已经有 <code>context_builder.py</code>、<code>chat_service.py</code>、<code>echomemory_client.py</code> 和 <code>model_client.py</code>，Context Engine 可以在现有结构上逐步演进。
+      </p>
+
+      <h3>实施路线</h3>
+      <table>
+        <thead>
+          <tr><th>阶段</th><th>本阶段改造</th><th>不做什么</th><th>测试重点</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Phase 1</td>
+            <td>把当前 <code>ContextBuilder</code> 调整为稳定前缀 + 动态会话 + 检索记忆 + 最近历史 + 当前请求。</td>
+            <td>不引入工具 schema，不扫描工作区，不做复杂摘要。</td>
+            <td>验证 messages 顺序、检索结果进入上下文、当前请求最后、动态字段不进入稳定前缀。</td>
+          </tr>
+          <tr>
+            <td>Phase 2</td>
+            <td>增加 token budget、长历史摘要、context debug trace。</td>
+            <td>不改变对外 chat API 的基本语义。</td>
+            <td>验证长会话不丢关键事实，摘要可追溯。</td>
+          </tr>
+          <tr>
+            <td>Phase 3</td>
+            <td>加入工具契约、工具观察、refs 写入策略和任务计划。</td>
+            <td>不把工具输出直接混入普通聊天历史。</td>
+            <td>验证工具结果结构化、失败可解释、重要证据可写入 EchoMemory。</td>
+          </tr>
+          <tr>
+            <td>Phase 4</td>
+            <td>加入 Project Profile、Workspace State、跨任务恢复和阶段性 commit。</td>
+            <td>不追求全量历史全文进入模型。</td>
+            <td>验证跨任务记忆、工作区证据、长任务恢复。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table>
+        <thead>
+          <tr><th>模块</th><th>建议职责</th><th>关键改造</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>config.py</code></td>
+            <td>定义各层开关、token budget、摘要策略、缓存前缀版本。</td>
+            <td>新增 <code>context</code> 配置段，避免所有策略挤进 <code>chat</code>。</td>
+          </tr>
+          <tr>
+            <td><code>context_builder.py</code></td>
+            <td>按固定顺序组装 messages，负责裁剪、标签化、脱敏。</td>
+            <td>拆出 stable prefix、dynamic state、memory、workspace、history、current request。</td>
+          </tr>
+          <tr>
+            <td><code>chat_service.py</code></td>
+            <td>编排一轮会话：写 user、检索、构建上下文、调模型、写 assistant。</td>
+            <td>保存 context trace，便于 UI 查看每轮实际输入。</td>
+          </tr>
+          <tr>
+            <td><code>echomemory_client.py</code></td>
+            <td>封装 session、retrieval、refs、commit API。</td>
+            <td>支持 memory item 的 source、kind、score、recency 标准化。</td>
+          </tr>
+          <tr>
+            <td><code>model_client.py</code></td>
+            <td>调用 OpenAI-compatible / OpenClaw / Hermes 风格模型端点。</td>
+            <td>暴露 token 使用量、缓存命中指标、工具调用结果。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>配置草案</h3>
+      <pre><code>{
+  "context": {
+    "phase": "dialogue",
+    "stable_prefix_version": "context-v1",
+    "max_context_tokens": 12000,
+    "protect_current_request": true,
+    "protect_system_policy": true,
+    "history_turns": 8,
+    "summary_enabled": false,
+    "retrieval_limit": 8,
+    "tool_context_enabled": false,
+    "tool_observation_max_tokens": 0,
+    "workspace_state_enabled": false,
+    "debug_trace_enabled": true
+  }
+}</code></pre>
+
+      <h3>Phase 1 验收标准</h3>
+      <ul>
+        <li>同一会话连续两轮中，Agent Charter、Behavior Policy、Memory Contract 的文本完全一致。</li>
+        <li><code>timestamp_utc</code>、<code>session_id</code>、retrieval items、current user message 不出现在稳定前缀中。</li>
+        <li>检索结果每条都带 kind、source、score 或等价字段。</li>
+        <li>最终 messages 顺序为 Agent Charter、Behavior Policy、Memory Contract、Session State、Retrieved Memory、Conversation Tail、Current Request。</li>
+        <li>debug trace 至少展示每一层是否启用、字符数或 token 估算、最终 messages 顺序。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="references">
+      <h2>13. 参考与设计取舍</h2>
+      <table>
+        <thead>
+          <tr><th>来源</th><th>可借鉴点</th><th>在本文中的落点</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="https://www.sohu.com/a/1017651653_122189055">Sohu 文章：Prompt Caching 相关讨论</a></td>
+            <td>把稳定 prompt 放在前缀，让高频重复的上下文获得缓存收益。</td>
+            <td>第 5 节的稳定前缀顺序，以及把动态字段后置的约束。</td>
+          </tr>
+          <tr>
+            <td>OpenClaw 类本地 Agent / 模型网关</td>
+            <td>模型入口与 Agent orchestration 解耦，通过兼容协议承载工具和上下文。</td>
+            <td>Tool Contract 与 Model Client 分离，Context Engine 只产出标准 messages。</td>
+          </tr>
+          <tr>
+            <td>Hermes 类工具型 Agent</td>
+            <td>强调工具观察、执行状态、阶段摘要和可恢复任务状态。</td>
+            <td>Tool Observations、Task Plan、Session Summary 的分层。</td>
+          </tr>
+          <tr>
+            <td>EchoMemory 当前工程</td>
+            <td>session、retrieval、refs、commit 已经形成记忆闭环。</td>
+            <td>Context Engine 只通过 HTTP 使用 EchoMemory，不复制内部记忆逻辑。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout danger">
+        设计取舍：本文没有把“所有历史全文”作为目标。更好的通用 Agent 上下文应该像工作台：稳定规则在前，当前证据在中，最近对话和本轮请求在后，长期历史由 EchoMemory 和摘要共同承载。
+      </div>
+    </section>
+
+    <footer>
+      EchoMem Agent Context Engine design. Stable prefix first, dynamic evidence later, current request last.
+    </footer>
+  </main>
+</body>
+</html>

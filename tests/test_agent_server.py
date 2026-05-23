@@ -66,6 +66,19 @@ class FakeEchoMemoryHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+        if self.path == "/api/sessions/chat-001/commits/archive_001/memories":
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "summary": {
+                        "session_id": "chat-001",
+                        "commit_id": "archive_001",
+                        "memory_kinds": ["preference"],
+                        "memories": [{"engine_id": "simple", "kind": "preference", "title": "user preference"}],
+                    }
+                },
+            )
+            return
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
 
     def do_POST(self) -> None:
@@ -169,6 +182,7 @@ class AgentServerTests(unittest.TestCase):
             self.assertIn("memory-highlight", html)
             self.assertIn("Filesystem Target", html)
             self.assertIn("平铺展开", html)
+            self.assertIn("本次 commit 抽取了", html)
         finally:
             server.shutdown()
             server.server_close()
@@ -194,6 +208,10 @@ class AgentServerTests(unittest.TestCase):
             with urlopen(f"{base_url}/agent/inspect/runtime", timeout=2) as response:
                 runtime_payload = json.loads(response.read().decode("utf-8"))
             self.assertEqual(runtime_payload["features"]["session_service"], "ready:D03")
+
+            with urlopen(f"{base_url}/api/sessions/chat-001/commits/archive_001/memories", timeout=2) as response:
+                summary = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(summary["summary"]["memory_kinds"], ["preference"])
         finally:
             agent.shutdown()
             agent.server_close()

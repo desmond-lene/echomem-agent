@@ -129,7 +129,6 @@ def _apply_observer_alibaba_config(config: AgentConfig) -> AgentConfig:
         ),
     )
 
-
 def _first_model_for_provider(model_map: dict[str, Any], provider: str) -> str | None:
     for model, mapped_provider in model_map.items():
         if mapped_provider == provider:

@@ -475,6 +475,53 @@ INDEX_HTML = r"""<!doctype html>
       font-size: 12px;
       font-weight: 800;
     }
+    .memory-test-select {
+      width: 168px;
+      min-height: 30px;
+      margin: 0;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: #fff;
+      color: #465168;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .commit-memory-detail {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid #dbe5f2;
+      border-radius: 10px;
+      background: #fbfcff;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .commit-memory-empty { color: var(--muted); }
+    .commit-memory-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .commit-memory-tag {
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #edf4ff;
+      color: #26508d;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .commit-memory-item {
+      padding: 8px;
+      border: 1px solid #e4e9f2;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .commit-memory-item strong {
+      display: inline;
+      margin: 0;
+      color: #22304a;
+    }
     .send-button {
       display: grid;
       place-items: center;
@@ -704,6 +751,17 @@ INDEX_HTML = r"""<!doctype html>
                 <div class="composer-actions">
                   <div class="tool-row">
                     <button class="chip-button" id="memoryChip">记忆检索</button>
+                    <select class="memory-test-select" id="memoryTestKind" title="选择记忆测试场景">
+                      <option value="all">全部类型记忆</option>
+                      <option value="profile">profile 用户画像</option>
+                      <option value="preference">preference 偏好</option>
+                      <option value="entity">entity 实体</option>
+                      <option value="event">event 事件</option>
+                      <option value="agent_case">agent_case 案例</option>
+                      <option value="pattern">pattern 模式</option>
+                      <option value="tool_experience">tool_experience 工具经验</option>
+                    </select>
+                    <button class="chip-button" id="memoryTestChip">记忆测试</button>
                     <button class="chip-button" id="commitChip">提交归档</button>
                   </div>
                   <button class="send-button" id="sendChat" title="发送并生成">↑</button>
@@ -742,6 +800,9 @@ INDEX_HTML = r"""<!doctype html>
                   <button class="chip-button" id="memoryRefresh">刷新 EchoMemory 信息</button>
                 </div>
               </div>
+              <div class="commit-memory-detail" id="commitMemorySummary">
+                <div class="commit-memory-empty">完成提交后，这里会显示本次 commit 实际抽取的记忆类型和详情。</div>
+              </div>
             </div>
           </div>
         </div>
@@ -778,6 +839,10 @@ INDEX_HTML = r"""<!doctype html>
           <pre id="fileContent">点击文件查看内容</pre>
           <label>Events</label>
           <pre id="events">{}</pre>
+          <label>Commit Memory Details</label>
+          <div class="commit-memory-detail" id="commitMemoryDetails">
+            <div class="commit-memory-empty">暂无 commit 记忆详情。</div>
+          </div>
           <label>Last Response</label>
           <pre id="last">{}</pre>
         </div>
@@ -790,6 +855,25 @@ INDEX_HTML = r"""<!doctype html>
     let fsMode = "tree";
     let sessions = [];
     let activeSession = null;
+    let lastCommitMemorySummary = null;
+    const memoryTestScenarios = {
+      profile: ["我是后端工程师，长期维护 EchoMemory 记忆系统。"],
+      preference: ["我喜欢你以后默认先给结论，再给简洁步骤。"],
+      entity: ["EchoMemory 项目中的 TreeMemoryEngine 模块负责把会话归档抽取成结构化记忆。"],
+      event: ["决定先完成 simple 引擎验证，再推进召回优化。"],
+      agent_case: ["这个任务的问题是 commit 结果看不到记忆类型，修复后结果是页面可以展示本轮抽取详情。"],
+      pattern: ["每次修改公开接口后的固定流程是补单测、跑完整测试、再重启服务。"],
+      tool_experience: ["使用 rg 命令定位文本，遇到路径过宽时先收窄目录再重试。"],
+      all: [
+        "我是后端工程师，目标是把 EchoMemory 做成稳定的记忆系统。",
+        "我喜欢你以后默认用简洁中文和分步骤说明。",
+        "TreeMemoryEngine 模块负责把会话归档抽取成结构化记忆。",
+        "决定先完成 simple 引擎验证，再推进召回优化。",
+        "这个任务的问题是接口返回不透明，修复后结果是可以看到 commit 记忆类型。",
+        "每次修改公开接口后的固定流程是补单测、跑测试、再重启服务。",
+        "使用 rg 命令定位文本，遇到参数报错时先收窄路径再重试。"
+      ]
+    };
     const sessionStoreKey = "echomem-agent.sessions.v1";
 
     function sessionId() { return $("sessionId").value.trim(); }
@@ -1036,14 +1120,54 @@ INDEX_HTML = r"""<!doctype html>
       return data;
     }
     async function waitCommit(sessionIdForCommit, archiveId) {
-      for (let attempt = 0; attempt < 80; attempt += 1) {
-        const data = await fetch(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commits/${encodeURIComponent(archiveId)}`).then((r) => r.json());
+      for (let attempt = 0; attempt < 240; attempt += 1) {
+        const response = await fetch(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commits/${encodeURIComponent(archiveId)}`);
+        const data = await response.json();
         show("last", data);
+        if (!response.ok || data.error) throw new Error(data.message || data.error || `commit status ${response.status}`);
         if (data.status?.status === "completed") return data.status;
         if (data.status?.status === "failed") throw new Error(data.status.error || "commit failed");
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (attempt % 10 === 0) $("sideStatus").textContent = `等待 commit 完成：${archiveId}`;
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
       throw new Error(`commit timeout: ${archiveId}`);
+    }
+    async function fetchCommitMemories(sessionIdForCommit, commitId) {
+      const data = await fetch(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commits/${encodeURIComponent(commitId)}/memories`).then((r) => r.json());
+      show("last", data);
+      if (data.error) throw new Error(data.message || data.error);
+      return data.summary || {memory_kinds: [], memories: []};
+    }
+    function formatCommitMemories(summary) {
+      const kinds = Array.isArray(summary.memory_kinds) ? summary.memory_kinds : [];
+      if (kinds.length === 0) return "本次 commit 没有抽取出长期记忆。";
+      const count = Array.isArray(summary.memories) ? summary.memories.length : 0;
+      return `本次 commit 抽取了 ${count} 条记忆，类型：${kinds.join(", ")}`;
+    }
+    function renderCommitMemoryDetails(summary) {
+      lastCommitMemorySummary = summary;
+      const html = commitMemoryHtml(summary);
+      $("commitMemorySummary").innerHTML = html;
+      $("commitMemoryDetails").innerHTML = html;
+    }
+    function commitMemoryHtml(summary) {
+      if (!summary) return `<div class="commit-memory-empty">暂无 commit 记忆详情。</div>`;
+      const kinds = Array.isArray(summary.memory_kinds) ? summary.memory_kinds : [];
+      const memories = Array.isArray(summary.memories) ? summary.memories : [];
+      if (kinds.length === 0) return `<div class="commit-memory-empty">本次 commit 没有抽取出长期记忆。</div>`;
+      const tags = kinds.map((kind) => `<span class="commit-memory-tag">${escapeHtml(kind)}</span>`).join("");
+      const items = memories.map((memory) => `
+        <div class="commit-memory-item">
+          <strong>${escapeHtml(memory.kind || "memory")}</strong>
+          ${escapeHtml(memory.title || "")}
+          <div>${escapeHtml(memory.text || "")}</div>
+        </div>
+      `).join("");
+      return `
+        <div><strong>commit:</strong> ${escapeHtml(summary.commit_id || "-")}</div>
+        <div class="commit-memory-tags">${tags}</div>
+        ${items}
+      `;
     }
     async function refreshInspectors() {
       try {
@@ -1076,10 +1200,7 @@ INDEX_HTML = r"""<!doctype html>
     $("openSession").onclick = async () => {
       resetConversation();
     };
-    $("sendChat").onclick = async () => {
-      const content = $("userText").value.trim();
-      if (!content) return;
-      $("userText").value = "";
+    async function sendChatMessage(content, options = {}) {
       const activeSessionId = ensureSessionId();
       const targetSession = findSession(activeSessionId);
       if (targetSession && targetSession.title === "新对话") {
@@ -1088,7 +1209,7 @@ INDEX_HTML = r"""<!doctype html>
         saveSessions();
         renderSessions();
       }
-      bubble("user", content);
+      bubble("user", content, {persist: options.persistUser !== false});
       const pending = document.createElement("div");
       pending.className = "msg assistant";
       pending.innerHTML = `<div class="meta">assistant</div>生成中...`;
@@ -1115,6 +1236,7 @@ INDEX_HTML = r"""<!doctype html>
             renderConversation();
           }
         }
+        return data;
       } catch (error) {
         rememberMessageFor(activeSessionId, "tool", `请求失败：${error.message}`);
         if (activeSession?.id === activeSessionId) {
@@ -1125,7 +1247,14 @@ INDEX_HTML = r"""<!doctype html>
             renderConversation();
           }
         }
+        throw error;
       }
+    }
+    $("sendChat").onclick = async () => {
+      const content = $("userText").value.trim();
+      if (!content) return;
+      $("userText").value = "";
+      await sendChatMessage(content);
     };
     async function commitCurrentSession() {
       const sessionIdForCommit = ensureSessionId();
@@ -1135,10 +1264,37 @@ INDEX_HTML = r"""<!doctype html>
       });
       if (activeSession?.id === sessionIdForCommit) bubble("assistant", `commit accepted -> ${data.result.archive_id}`);
       else rememberMessageFor(sessionIdForCommit, "assistant", `commit accepted -> ${data.result.archive_id}`);
-      const status = await waitCommit(sessionIdForCommit, data.result.archive_id);
+      const commitId = data.result.commit_id || data.result.archive_id;
+      const status = await waitCommit(sessionIdForCommit, commitId);
+      const memorySummary = await fetchCommitMemories(sessionIdForCommit, commitId);
+      renderCommitMemoryDetails(memorySummary);
       await refreshInspectors();
-      if (activeSession?.id === sessionIdForCommit) bubble("assistant", `commit ${status.status} -> ${status.archive_id}`);
-      else rememberMessageFor(sessionIdForCommit, "assistant", `commit ${status.status} -> ${status.archive_id}`);
+      const message = `commit ${status.status} -> ${commitId}\n${formatCommitMemories(memorySummary)}`;
+      if (activeSession?.id === sessionIdForCommit) bubble("assistant", message);
+      else rememberMessageFor(sessionIdForCommit, "assistant", message);
+      return memorySummary;
+    }
+    async function runMemoryTest() {
+      const kind = $("memoryTestKind").value || "all";
+      const scenario = memoryTestScenarios[kind] || memoryTestScenarios.all;
+      $("memoryTestChip").disabled = true;
+      $("commitChip").disabled = true;
+      try {
+        setSideView("context");
+        bubble("tool", `开始记忆测试：${kind}，共 ${scenario.length} 轮。`);
+        for (const content of scenario) {
+          await sendChatMessage(content);
+        }
+        bubble("tool", "测试对话完成，开始自动提交并抽取记忆。");
+        const summary = await commitCurrentSession();
+        setSideView("memory");
+        show("last", {memory_test: kind, summary});
+      } catch (error) {
+        bubble("tool", `记忆测试失败：${error.message}`);
+      } finally {
+        $("memoryTestChip").disabled = false;
+        $("commitChip").disabled = false;
+      }
     }
     $("refresh").onclick = refreshInspectors;
     $("refreshTree").onclick = refreshTree;
@@ -1152,6 +1308,7 @@ INDEX_HTML = r"""<!doctype html>
     $("memoryNav").onclick = () => setSideView("memory");
     $("memoryRefresh").onclick = refreshInspectors;
     $("memoryChip").onclick = () => $("userText").value = "请基于 EchoMemory 检索结果，帮我总结当前会话中的关键记忆。";
+    $("memoryTestChip").onclick = runMemoryTest;
     $("commitChip").onclick = commitCurrentSession;
     $("sessionId").oninput = syncFsTarget;
     for (const item of document.querySelectorAll(".quickPrompt")) {
@@ -1203,7 +1360,7 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         if path == "/agent/config":
             self._send_json(HTTPStatus.OK, self.server.config.public_dict())
             return
-        if path.startswith("/agent/inspect/"):
+        if path.startswith("/agent/inspect/") or path.startswith("/api/"):
             self._proxy()
             return
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})

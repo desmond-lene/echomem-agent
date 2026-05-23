@@ -74,6 +74,9 @@ class EchoMemoryClient:
     def commit(self, session_id: str) -> dict[str, Any]:
         return self.post(f"/api/sessions/{session_id}/commit", {})
 
+    def get_commit_memories(self, session_id: str, commit_id: str) -> dict[str, Any]:
+        return self.get(f"/api/sessions/{session_id}/commits/{commit_id}/memories")
+
     def get(self, path: str) -> dict[str, Any]:
         request = Request(urljoin(self.base_url, path.lstrip("/")), method="GET")
         try:
