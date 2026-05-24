@@ -24,7 +24,7 @@ INDEX_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EchoMemory Agent Playground</title>
+  <title>EchoMemory 智能体对话</title>
   <style>
     :root {
       --ink: #182235;
@@ -593,6 +593,20 @@ INDEX_HTML = r"""<!doctype html>
       font-size: 12px;
       font-weight: 850;
     }
+    .context-layer {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #4050c9;
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .context-layer.memory {
+      background: #eaf3ff;
+      color: #2458c7;
+    }
     .context-content { white-space: pre-wrap; }
     .memory-highlight {
       display: block;
@@ -604,6 +618,16 @@ INDEX_HTML = r"""<!doctype html>
       background: #f0f6ff;
       color: #173b75;
       font-weight: 800;
+    }
+    .memory-highlight::before {
+      content: "EchoMemory 检索上下文";
+      display: block;
+      margin-bottom: 6px;
+      color: #315fbd;
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
     }
     .history-highlight {
       display: block;
@@ -688,7 +712,7 @@ INDEX_HTML = r"""<!doctype html>
 <body>
   <header>
     <div>
-      <h1>EchoMemory Agent Chat</h1>
+      <h1>EchoMemory 智能体对话</h1>
       <div class="status" id="status">连接中...</div>
     </div>
     <div class="toolbar">
@@ -701,7 +725,7 @@ INDEX_HTML = r"""<!doctype html>
         <aside class="chat-nav">
           <div class="brand-row">
             <div class="brand-dot">E</div>
-            <div>Echo Agent</div>
+            <div>Echo 智能体</div>
           </div>
           <button class="nav-button primary" id="openSession">＋ 新对话</button>
           <div class="nav-list">
@@ -721,7 +745,7 @@ INDEX_HTML = r"""<!doctype html>
             <div class="chat-topbar">
               <div class="chat-title">
                 <span>EchoMemory Agent</span>
-                <span class="model-pill" id="modelBadge">model loading</span>
+                <span class="model-pill" id="modelBadge">模型加载中</span>
               </div>
             </div>
             <div class="identity-row">
@@ -774,7 +798,7 @@ INDEX_HTML = r"""<!doctype html>
             <div class="chat-topbar">
               <div class="chat-title">
                 <span>EchoMemory</span>
-                <span class="model-pill">memory runtime</span>
+                <span class="model-pill">记忆运行时</span>
               </div>
             </div>
             <div class="memory-page">
@@ -810,20 +834,20 @@ INDEX_HTML = r"""<!doctype html>
     </section>
     <section>
       <div class="panel-head">
-        <h2 id="sideTitle">Context Inspector</h2>
+        <h2 id="sideTitle">上下文检查器</h2>
         <span class="status" id="sideStatus">模型上下文</span>
       </div>
       <div class="panel-body inspect-grid">
         <div class="side-view active" id="contextPanel">
-          <label>Assembled Context</label>
-          <div id="contextView" class="context-view">发送消息后，这里会显示本轮实际拼接并发送给模型的上下文 messages。</div>
+          <label>组装后的模型上下文</label>
+          <div id="contextView" class="context-view">发送消息后，这里会显示本轮实际拼接并发送给模型的上下文。</div>
         </div>
         <div class="side-view" id="memoryPanel">
-          <label>Agent Config</label>
+          <label>智能体配置</label>
           <pre id="config">{}</pre>
           <label>EchoMemory Runtime</label>
           <pre id="runtime">{}</pre>
-          <label>Filesystem Target</label>
+          <label>文件系统目标</label>
           <div class="fs-controls">
             <label>目标 URI<input id="fsTarget" value="echo://sessions/chat-001" /></label>
             <label>深度<input id="fsDepth" value="5" /></label>
@@ -909,6 +933,7 @@ INDEX_HTML = r"""<!doctype html>
         title: "新对话",
         messages: [],
         context: [],
+        contextTrace: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -969,8 +994,8 @@ INDEX_HTML = r"""<!doctype html>
       const items = activeSession?.messages || [];
       $("welcome").style.display = items.length === 0 ? "grid" : "none";
       for (const item of items) bubble(item.role, item.content, {persist: false});
-      if (activeSession?.context?.length) showContext(activeSession.context);
-      else $("contextView").textContent = "发送消息后，这里会显示本轮实际拼接并发送给模型的上下文 messages。";
+      if (activeSession?.context?.length) showContext(activeSession.context, activeSession.contextTrace);
+      else $("contextView").textContent = "发送消息后，这里会显示本轮实际拼接并发送给模型的上下文。";
     }
     function rememberMessage(role, content) {
       rememberMessageFor(sessionId(), role, content);
@@ -985,32 +1010,86 @@ INDEX_HTML = r"""<!doctype html>
       saveSessions();
       renderSessions();
     }
-    function rememberContext(messages) {
-      rememberContextFor(sessionId(), messages);
+    function rememberContext(messages, trace = null) {
+      rememberContextFor(sessionId(), messages, trace);
     }
-    function rememberContextFor(targetSessionId, messages) {
+    function rememberContextFor(targetSessionId, messages, trace = null) {
       const session = findSession(targetSessionId);
       if (!session) return;
       session.context = messages;
+      session.contextTrace = trace;
       session.updatedAt = new Date().toISOString();
       sessions = [session, ...sessions.filter((item) => item.id !== session.id)];
       if (activeSession?.id === session.id) activeSession = session;
       saveSessions();
       renderSessions();
     }
-    function showContext(messages) {
+    function showContext(messages, trace = null) {
       if (!Array.isArray(messages)) return;
-      $("contextView").innerHTML = messages.map((message, index) => `
+      const rows = contextDisplayRows(messages, trace);
+      $("contextView").innerHTML = rows.map((row) => `
         <div class="context-message">
-          <div class="context-role">#${index + 1} ${escapeHtml(message.role)}</div>
-          <div class="context-content">${highlightContext(message.content || "", message.role)}</div>
+          <div class="context-role">${escapeHtml(row.title)}${contextLayerBadge(row.layer)}</div>
+          <div class="context-content">${highlightContext(row.content || "", row.role)}</div>
         </div>
       `).join("");
     }
+    function contextDisplayRows(messages, trace) {
+      const layers = Array.isArray(trace?.layers) ? trace.layers : [];
+      const grouped = new Set();
+      const rows = [];
+      for (const layer of layers) {
+        if (layer.name !== "近期对话" || !Array.isArray(layer.message_indexes) || layer.message_indexes.length <= 1) continue;
+        for (const index of layer.message_indexes) grouped.add(index);
+        rows.push({
+          title: `#${layer.message_indexes[0] + 1}-${layer.message_indexes[layer.message_indexes.length - 1] + 1} 近期对话`,
+          role: "conversation",
+          layer,
+          content: layer.message_indexes.map((index) => {
+            const message = messages[index] || {};
+            const speaker = message.role === "assistant" ? "助手" : "用户";
+            return `【${speaker}】\n${message.content || ""}`;
+          }).join("\n\n")
+        });
+      }
+      for (let index = 0; index < messages.length; index += 1) {
+        if (grouped.has(index)) continue;
+        const message = messages[index] || {};
+        rows.push({
+          title: `#${index + 1} ${roleLabel(message.role)}`,
+          role: message.role || "",
+          layer: contextLayerFor(index, trace),
+          content: message.content || ""
+        });
+      }
+      return rows.sort((a, b) => firstMessageIndex(a.layer, a.title) - firstMessageIndex(b.layer, b.title));
+    }
+    function firstMessageIndex(layer, title) {
+      if (Array.isArray(layer?.message_indexes) && layer.message_indexes.length > 0) return layer.message_indexes[0];
+      const match = String(title || "").match(/^#(\d+)/);
+      return match ? Number(match[1]) - 1 : 0;
+    }
+    function roleLabel(role) {
+      if (role === "system") return "系统";
+      if (role === "user") return "用户";
+      if (role === "assistant") return "助手";
+      if (role === "tool") return "工具";
+      return role || "消息";
+    }
+    function contextLayerFor(index, trace) {
+      const layers = Array.isArray(trace?.layers) ? trace.layers : [];
+      return layers.find((item) => Array.isArray(item.message_indexes) && item.message_indexes.includes(index));
+    }
+    function contextLayerBadge(layer) {
+      if (!layer) return "";
+      const isMemory = layer.source === "EchoMemory";
+      const label = `${layer.name}${layer.source ? " / " + layer.source : ""}`;
+      return `<span class="context-layer ${isMemory ? "memory" : ""}">${escapeHtml(label)}</span>`;
+    }
     function highlightContext(content, role) {
       const escaped = escapeHtml(content);
-      const withMemory = escaped.replace(/(&lt;memory&gt;[\s\S]*?&lt;\/memory&gt;)/g, '<strong class="memory-highlight">$1</strong>');
-      if (role === "user" || /(&lt;history&gt;|&lt;session&gt;)/.test(withMemory)) {
+      const withMemory = escaped.replace(/(&lt;retrieved_memory\b[\s\S]*?&lt;\/retrieved_memory&gt;|&lt;memory&gt;[\s\S]*?&lt;\/memory&gt;)/g, '<strong class="memory-highlight">$1</strong>');
+      if (role === "user" || /(&lt;history&gt;|&lt;session&gt;|&lt;current_request&gt;)/.test(withMemory)) {
         return `<strong class="history-highlight">${withMemory}</strong>`;
       }
       return withMemory;
@@ -1019,14 +1098,14 @@ INDEX_HTML = r"""<!doctype html>
       createConversation();
       $("messages").innerHTML = "";
       $("welcome").style.display = "grid";
-      $("contextView").textContent = "新对话已创建。发送消息后，这里会显示本轮实际拼接并发送给模型的上下文 messages。";
+      $("contextView").textContent = "新对话已创建。发送消息后，这里会显示本轮实际拼接并发送给模型的上下文。";
       syncFsTarget(true);
     }
     function bubble(role, text, options = {}) {
       $("welcome").style.display = "none";
       const div = document.createElement("div");
       div.className = `msg ${role}`;
-      div.innerHTML = `<div class="meta">${role}</div>${escapeHtml(text)}`;
+      div.innerHTML = `<div class="meta">${roleLabel(role)}</div>${escapeHtml(text)}`;
       $("messages").appendChild(div);
       $("chatScroll").scrollTop = $("chatScroll").scrollHeight;
       if (options.persist !== false) rememberMessage(role, text);
@@ -1054,7 +1133,7 @@ INDEX_HTML = r"""<!doctype html>
       $("memoryMainView").classList.toggle("active", isMemory);
       $("chatNav").classList.toggle("active", !isMemory);
       $("memoryNav").classList.toggle("active", isMemory);
-      $("sideTitle").textContent = isMemory ? "EchoMemory" : "Context Inspector";
+      $("sideTitle").textContent = isMemory ? "EchoMemory" : "上下文检查器";
       $("sideStatus").textContent = isMemory ? "记忆与调试信息" : "模型上下文";
       if (isMemory) refreshInspectors();
     }
@@ -1173,12 +1252,12 @@ INDEX_HTML = r"""<!doctype html>
       try {
         const config = await fetch("/agent/config").then((r) => r.json());
         show("config", config);
-        $("modelBadge").textContent = `${config.model?.provider || "model"} / ${config.model?.model || "unknown"}`;
-        $("memoryModelLabel").textContent = `${config.model?.provider || "model"} / ${config.model?.model || "unknown"}`;
-        $("status").textContent = `Model ${config.model?.provider || ""} / EchoMemory ${sessionId()}`;
+        $("modelBadge").textContent = `${config.model?.provider || "模型"} / ${config.model?.model || "未知"}`;
+        $("memoryModelLabel").textContent = `${config.model?.provider || "模型"} / ${config.model?.model || "未知"}`;
+        $("status").textContent = `模型 ${config.model?.provider || ""} / EchoMemory ${sessionId()}`;
       } catch (error) {
         show("config", {error: error.message});
-        $("modelBadge").textContent = "model unavailable";
+        $("modelBadge").textContent = "模型不可用";
         $("status").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
       }
       try {
@@ -1212,7 +1291,7 @@ INDEX_HTML = r"""<!doctype html>
       bubble("user", content, {persist: options.persistUser !== false});
       const pending = document.createElement("div");
       pending.className = "msg assistant";
-      pending.innerHTML = `<div class="meta">assistant</div>生成中...`;
+      pending.innerHTML = `<div class="meta">助手</div>生成中...`;
       $("messages").appendChild(pending);
       $("chatScroll").scrollTop = $("chatScroll").scrollHeight;
       try {
@@ -1226,12 +1305,12 @@ INDEX_HTML = r"""<!doctype html>
             stream: false
           })
         });
-        rememberContextFor(activeSessionId, data.messages);
+        rememberContextFor(activeSessionId, data.messages, data.context_trace);
         rememberMessageFor(activeSessionId, "assistant", data.assistant.content);
         if (activeSession?.id === activeSessionId) {
           if (pending.isConnected) {
-            pending.innerHTML = `<div class="meta">assistant</div>${escapeHtml(data.assistant.content)}`;
-            showContext(data.messages);
+            pending.innerHTML = `<div class="meta">助手</div>${escapeHtml(data.assistant.content)}`;
+            showContext(data.messages, data.context_trace);
           } else {
             renderConversation();
           }

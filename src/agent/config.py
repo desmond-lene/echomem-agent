@@ -47,11 +47,22 @@ class ChatConfig:
 
 
 @dataclass(frozen=True)
+class ContextConfig:
+    phase: str = "dialogue"
+    stable_prefix_version: str = "context-v1"
+    debug_trace_enabled: bool = True
+    tool_context_enabled: bool = False
+    workspace_state_enabled: bool = False
+    summary_enabled: bool = False
+
+
+@dataclass(frozen=True)
 class AgentConfig:
     server: ServerConfig = ServerConfig()
     echomemory: EchoMemoryConfig = EchoMemoryConfig()
     model: ModelConfig = ModelConfig()
     chat: ChatConfig = ChatConfig()
+    context: ContextConfig = ContextConfig()
 
     def public_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -73,6 +84,7 @@ def load_config(config_path: str | None = None, *, echomem_url: str | None = Non
         echomemory=_build(EchoMemoryConfig, data.get("echomemory", {})),
         model=_build(ModelConfig, data.get("model", {})),
         chat=_build(ChatConfig, data.get("chat", {})),
+        context=_build(ContextConfig, data.get("context", {})),
     )
 
     config = replace(

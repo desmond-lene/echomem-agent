@@ -21,7 +21,7 @@ class AgentChatService:
         self.config = config
         self.memory = memory or EchoMemoryClient(config.echomemory)
         self.model = model or OpenAICompatibleChatClient(config.model)
-        self.context_builder = ContextBuilder(config.chat)
+        self.context_builder = ContextBuilder(config.chat, config.context)
 
     def chat(self, payload: dict[str, Any]) -> dict[str, Any]:
         user_id = str(payload.get("user_id") or "").strip()
@@ -44,7 +44,7 @@ class AgentChatService:
                 limit=self.config.chat.retrieval_limit,
             )
 
-        messages = self.context_builder.build(
+        context_result = self.context_builder.build_with_trace(
             user_id=user_id,
             agent_id=agent_id,
             session_id=session_id,
@@ -52,6 +52,7 @@ class AgentChatService:
             history=history,
             retrieval=retrieval,
         )
+        messages = context_result.messages
         completion = self.model.complete(messages)
         assistant_write = self.memory.add_message(session_id, "assistant", completion.content)
 
@@ -66,6 +67,7 @@ class AgentChatService:
             "retrieval": retrieval,
             "model": {"provider": self.config.model.provider, "model": self.config.model.model},
             "messages": messages,
+            "context_trace": context_result.trace if self.config.context.debug_trace_enabled else None,
             "writes": {"session": scope, "user": user_write, "assistant": assistant_write},
             "commit": commit_result,
         }

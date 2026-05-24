@@ -47,7 +47,18 @@ class FakeEchoMemoryHandler(BaseHTTPRequestHandler):
             )
             return
         if self.path.startswith("/agent/inspect/fs/read"):
-            self._send_json(HTTPStatus.OK, {"uri": "echo://sessions/chat-001/current/session.json", "text": "{}"})
+            text = "{}"
+            if "messages.jsonl" in self.path:
+                text = "\n".join(
+                    [
+                        json.dumps({"id": "msg_prev_001", "role": "user", "content": "你好"}, ensure_ascii=False),
+                        json.dumps(
+                            {"id": "msg_prev_002", "role": "assistant", "content": "你好，我可以帮你整理方案。"},
+                            ensure_ascii=False,
+                        ),
+                    ]
+                )
+            self._send_json(HTTPStatus.OK, {"uri": "echo://sessions/chat-001/current/messages.jsonl", "text": text})
             return
         if self.path == "/agent/inspect/events":
             self._send_json(HTTPStatus.OK, {"events": []})
@@ -174,13 +185,15 @@ class AgentServerTests(unittest.TestCase):
             with urlopen(f"http://127.0.0.1:{server.server_port}/", timeout=2) as response:
                 html = response.read().decode("utf-8")
             self.assertEqual(response.status, HTTPStatus.OK)
-            self.assertIn("EchoMemory Agent", html)
+            self.assertIn("EchoMemory 智能体对话", html)
             self.assertIn("sessionList", html)
             self.assertIn("提交归档", html)
             self.assertNotIn('id="commit"', html)
-            self.assertIn("Assembled Context", html)
+            self.assertIn("组装后的模型上下文", html)
             self.assertIn("memory-highlight", html)
-            self.assertIn("Filesystem Target", html)
+            self.assertIn("EchoMemory 检索上下文", html)
+            self.assertIn("近期对话", html)
+            self.assertIn("文件系统目标", html)
             self.assertIn("平铺展开", html)
             self.assertIn("本次 commit 抽取了", html)
         finally:
@@ -248,6 +261,12 @@ class AgentServerTests(unittest.TestCase):
                 },
             )
             self.assertEqual(response["assistant"]["content"], "这是模型生成的 D03 提交方案。")
+            trace = response["context_trace"]
+            self.assertEqual(trace["phase"], "dialogue")
+            memory_layers = [layer for layer in trace["layers"] if layer["name"] == "检索记忆"]
+            self.assertEqual(memory_layers[0]["source"], "EchoMemory")
+            self.assertTrue(memory_layers[0]["highlight"])
+            self.assertEqual(memory_layers[0]["item_count"], 1)
             self.assertEqual([call["path"] for call in FakeEchoMemoryHandler.calls], [
                 "/api/sessions/open",
                 "/agent/inspect/fs/read?uri=echo%3A%2F%2Fsessions%2Fchat-001%2Fcurrent%2Fmessages.jsonl",
@@ -258,11 +277,16 @@ class AgentServerTests(unittest.TestCase):
             self.assertEqual(FakeModelHandler.calls[0]["path"], "/v1/chat/completions")
             model_payload = FakeModelHandler.calls[0]["payload"]
             self.assertEqual(model_payload["model"], "fake-chat")
+            roles = [message["role"] for message in model_payload["messages"]]
+            self.assertEqual(roles, ["system", "system", "system", "system", "user", "assistant", "user"])
             joined_context = "\n".join(message["content"] for message in model_payload["messages"])
-            self.assertIn("EchoMemory Agent", joined_context)
-            self.assertIn("session_id: chat-001", joined_context)
-            self.assertIn("<session_history>", joined_context)
-            self.assertIn("<session>\n帮我整理 D03 的提交方案\n</session>", joined_context)
+            self.assertIn("你是 EchoMemory Agent", joined_context)
+            self.assertIn("EchoMemory 检索结果是候选上下文", joined_context)
+            self.assertNotIn("session_id: chat-001", joined_context)
+            self.assertNotIn("timestamp_utc", joined_context)
+            self.assertNotIn("<session_history>", joined_context)
+            self.assertIn("<current_request>\n帮我整理 D03 的提交方案\n</current_request>", joined_context)
+            self.assertIn('<retrieved_memory source="EchoMemory">', joined_context)
             self.assertIn("用户希望方案简洁", joined_context)
         finally:
             agent.shutdown()

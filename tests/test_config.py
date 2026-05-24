@@ -79,6 +79,33 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.model.base_url, "http://127.0.0.1:9999/v1")
         self.assertEqual(config.model.model, "fake-chat")
 
+    def test_context_config_loads_from_agent_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "agent.local.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "context": {
+                            "phase": "dialogue",
+                            "stable_prefix_version": "context-v2",
+                            "debug_trace_enabled": False,
+                            "tool_context_enabled": False,
+                            "workspace_state_enabled": False,
+                            "summary_enabled": False,
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.dict("os.environ", {"AGENT_CONFIG": str(config_path)}, clear=True):
+                config = load_config()
+
+        self.assertEqual(config.context.phase, "dialogue")
+        self.assertEqual(config.context.stable_prefix_version, "context-v2")
+        self.assertFalse(config.context.debug_trace_enabled)
+        self.assertFalse(config.public_dict()["context"]["debug_trace_enabled"])
+
 
 if __name__ == "__main__":
     unittest.main()

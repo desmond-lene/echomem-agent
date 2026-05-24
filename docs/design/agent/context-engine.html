@@ -343,7 +343,7 @@
           <tr>
             <td>Phase 1：纯对话 Agent</td>
             <td>让 echomem-agent 成为稳定的记忆增强聊天 Agent。</td>
-            <td>Agent Charter、Behavior Policy、Memory Contract、Session State、Retrieved Memory、Conversation Tail、Current Request。</td>
+            <td>Agent Charter、Behavior Policy、Memory Contract、Retrieved Memory、Conversation Tail、Current Request；Runtime Context 仅在必要时启用。</td>
             <td>工具调用、工作区扫描、任务计划、自动摘要、refs 写入策略、复杂 commit 策略。</td>
             <td>每轮能写入用户消息、检索 EchoMemory、按稳定顺序组装 messages、调用模型、写入 assistant 回复。</td>
           </tr>
@@ -468,9 +468,9 @@
           </tr>
           <tr>
             <td>6</td>
-            <td>Session State</td>
-            <td>user_id、agent_id、session_id、当前任务阶段、未完成目标。</td>
-            <td>Phase 1</td>
+            <td>Runtime Context</td>
+            <td>当前日期、会话范围说明等模型确实需要知道的运行时信息；默认不放裸 user_id、agent_id、session_id。</td>
+            <td>Phase 1 可选 / Phase 2</td>
             <td>每会话变化</td>
             <td><code>system</code></td>
           </tr>
@@ -541,9 +541,9 @@
           <tr><td>1</td><td>Agent Charter</td><td>固定身份、目标、边界和输出风格。</td></tr>
           <tr><td>2</td><td>Behavior Policy</td><td>事实性、安全、未知处理、引用规则。</td></tr>
           <tr><td>3</td><td>Memory Contract</td><td>说明 EchoMemory 检索结果如何使用、如何处理冲突。</td></tr>
-          <tr><td>4</td><td>Session State</td><td>user_id、agent_id、session_id、时间戳等动态会话信息。</td></tr>
-          <tr><td>5</td><td>Retrieved Memory</td><td>本轮检索到的偏好、事实和历史上下文。</td></tr>
-          <tr><td>6</td><td>Conversation Tail</td><td>最近 N 轮 user/assistant 原文。</td></tr>
+          <tr><td>4</td><td>Retrieved Memory</td><td>本轮检索到的偏好、事实和历史上下文；如果没有检索结果，可以省略该层。</td></tr>
+          <tr><td>5</td><td>Conversation Tail</td><td>最近 N 轮 user/assistant 原文。</td></tr>
+          <tr><td>6</td><td>Runtime Context，可选</td><td>仅在用户问题涉及时间、会话范围或调试时加入；默认不放裸 session_id。</td></tr>
           <tr><td>7</td><td>Current Request</td><td>当前用户原始输入，永远放最后。</td></tr>
         </tbody>
       </table>
@@ -616,7 +616,7 @@
       </div>
 
       <div class="callout warn">
-        当前 <code>src/agent/context_builder.py</code> 把 <code>timestamp_utc</code> 放在前段 <code>runtime_context</code> 中。正式 Context Engine 应把时间戳、session_id 等动态字段移到靠后的 Session State 区域，避免每轮破坏静态前缀缓存。
+        Phase 1 实现中，<code>timestamp_utc</code>、<code>session_id</code> 等动态字段默认不进入模型上下文。只有当用户问题明确依赖时间或会话范围时，才生成极简 Runtime Context，并放在当前请求之前。
       </div>
     </section>
 
@@ -956,7 +956,7 @@
         <li>同一会话连续两轮中，Agent Charter、Behavior Policy、Memory Contract 的文本完全一致。</li>
         <li><code>timestamp_utc</code>、<code>session_id</code>、retrieval items、current user message 不出现在稳定前缀中。</li>
         <li>检索结果每条都带 kind、source、score 或等价字段。</li>
-        <li>最终 messages 顺序为 Agent Charter、Behavior Policy、Memory Contract、Session State、Retrieved Memory、Conversation Tail、Current Request。</li>
+        <li>最终 messages 顺序为 Agent Charter、Behavior Policy、Memory Contract、Retrieved Memory、Conversation Tail、Current Request；Runtime Context 只在必要时插入当前请求之前。</li>
         <li>debug trace 至少展示每一层是否启用、字符数或 token 估算、最终 messages 顺序。</li>
       </ul>
     </section>
