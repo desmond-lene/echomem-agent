@@ -21,9 +21,10 @@ class EchoMemoryClient:
         self.base_url = config.base_url.rstrip("/") + "/"
 
     def open_session(self, user_id: str, agent_id: str, session_id: str) -> dict[str, Any]:
+        del user_id
         return self.post(
             "/api/sessions/open",
-            {"user_id": user_id, "agent_id": agent_id, "session_id": session_id},
+            {"agent_id": agent_id, "session_id": session_id},
         )
 
     def add_message(self, session_id: str, role: str, content: str) -> dict[str, Any]:
@@ -59,11 +60,11 @@ class EchoMemoryClient:
         session_id: str,
         limit: int,
     ) -> dict[str, Any]:
+        del user_id
         return self.post(
             "/api/retrieval/search",
             {
                 "query": query,
-                "user_id": user_id,
                 "agent_id": agent_id,
                 "session_id": session_id,
                 "limit": limit,
@@ -78,12 +79,13 @@ class EchoMemoryClient:
         return self.get(f"/api/sessions/{session_id}/commits/{commit_id}/memories")
 
     def get(self, path: str) -> dict[str, Any]:
-        request = Request(urljoin(self.base_url, path.lstrip("/")), method="GET")
+        request = Request(urljoin(self.base_url, path.lstrip("/")), method="GET", headers=self._headers())
         try:
             with urlopen(request, timeout=self.config.timeout_seconds) as response:
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
+            exc.close()
             raise EchoMemoryClientError(f"echomemory_http_{exc.code}: {detail}") from exc
         except URLError as exc:
             raise EchoMemoryClientError(f"echomemory_unreachable: {exc.reason}") from exc
@@ -94,13 +96,20 @@ class EchoMemoryClient:
             urljoin(self.base_url, path.lstrip("/")),
             data=body,
             method="POST",
-            headers={"Content-Type": "application/json"},
+            headers=self._headers({"Content-Type": "application/json"}),
         )
         try:
             with urlopen(request, timeout=self.config.timeout_seconds) as response:
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
+            exc.close()
             raise EchoMemoryClientError(f"echomemory_http_{exc.code}: {detail}") from exc
         except URLError as exc:
             raise EchoMemoryClientError(f"echomemory_unreachable: {exc.reason}") from exc
+
+    def _headers(self, base: dict[str, str] | None = None) -> dict[str, str]:
+        headers = dict(base or {})
+        if self.config.auth_key:
+            headers["X-Auth-Key"] = self.config.auth_key
+        return headers

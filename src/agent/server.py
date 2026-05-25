@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -55,6 +56,17 @@ INDEX_HTML = r"""<!doctype html>
       padding: 14px 18px;
       border-bottom: 1px solid var(--line);
       background: #fff;
+    }
+    .header-title {
+      display: grid;
+      gap: 3px;
+      min-width: 220px;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
     }
     h1 { margin: 0; font-size: 20px; }
     .status { color: var(--muted); font-size: 13px; }
@@ -298,6 +310,40 @@ INDEX_HTML = r"""<!doctype html>
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       padding: 10px 18px 0;
+    }
+    .account-switcher {
+      display: grid;
+      grid-template-columns: auto minmax(120px, 180px) minmax(180px, 240px) auto auto;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+      padding: 6px 8px;
+      border: 1px solid #e4e7ef;
+      border-radius: 10px;
+      background: #fafbfe;
+    }
+    .account-label {
+      color: #7a8495;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .current-account {
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #25314a;
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .account-switcher select {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid #e4e7ef;
+      border-radius: 10px;
+      background: #fafbfe;
+      color: var(--ink);
+      padding: 0 10px;
     }
     .identity-row label { color: #7a8495; }
     .identity-row input {
@@ -705,17 +751,27 @@ INDEX_HTML = r"""<!doctype html>
       .messages { padding: 12px 18px 22px; }
       .composer-wrap, .manual-reply { padding-left: 16px; padding-right: 16px; }
       .identity-row { grid-template-columns: 1fr; }
+      header { align-items: stretch; flex-direction: column; }
+      .header-actions { flex-wrap: wrap; }
+      .account-switcher { grid-template-columns: 1fr; width: 100%; }
       .memory-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
   <header>
-    <div>
+    <div class="header-title">
       <h1>EchoMemory 智能体对话</h1>
       <div class="status" id="status">连接中...</div>
     </div>
-    <div class="toolbar">
+    <div class="header-actions">
+      <div class="account-switcher">
+        <span class="account-label">当前账户</span>
+        <strong class="current-account" id="currentAccountLabel">local account</strong>
+        <select id="accountSelect" title="切换账户"></select>
+        <button id="createAccount">新建账户</button>
+        <button id="forgetAccount">移除</button>
+      </div>
       <button id="refresh">刷新状态</button>
     </div>
   </header>
@@ -749,8 +805,8 @@ INDEX_HTML = r"""<!doctype html>
               </div>
             </div>
             <div class="identity-row">
-              <label>user_id<input id="userId" value="alice" /></label>
               <label>agent_id<input id="agentId" value="demo-agent" /></label>
+              <input id="userId" type="hidden" value="local" />
               <input id="sessionId" type="hidden" />
             </div>
           </div>
@@ -880,6 +936,9 @@ INDEX_HTML = r"""<!doctype html>
     let sessions = [];
     let activeSession = null;
     let lastCommitMemorySummary = null;
+    let accounts = [];
+    let activeAccount = null;
+    let accountRevision = 0;
     const memoryTestScenarios = {
       profile: ["我是后端工程师，长期维护 EchoMemory 记忆系统。"],
       preference: ["我喜欢你以后默认先给结论，再给简洁步骤。"],
@@ -899,6 +958,7 @@ INDEX_HTML = r"""<!doctype html>
       ]
     };
     const sessionStoreKey = "echomem-agent.sessions.v1";
+    const accountStoreKey = "echomem-agent.accounts.v1";
 
     function sessionId() { return $("sessionId").value.trim(); }
     function createSessionId() {
@@ -913,19 +973,166 @@ INDEX_HTML = r"""<!doctype html>
       return sessionId();
     }
     function show(id, value) { $(id).textContent = JSON.stringify(value, null, 2); }
+    function authHeaders(base = {}) {
+      const headers = {...base};
+      if (activeAccount?.authKey) headers["X-Auth-Key"] = activeAccount.authKey;
+      return headers;
+    }
+    function isCurrentAccount(revision) {
+      return revision === accountRevision;
+    }
+    function accountSessionStoreKey() {
+      return `${sessionStoreKey}.${activeAccount?.id || "local"}`;
+    }
+    function sessionStoreKeyFor(accountId) {
+      return `${sessionStoreKey}.${accountId || "local"}`;
+    }
+    function loadAccounts() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(accountStoreKey) || "[]");
+        accounts = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        accounts = [];
+      }
+      if (accounts.length === 0) accounts = [{id: "local", label: "local account", authKey: ""}];
+      const activeId = localStorage.getItem(`${accountStoreKey}.active`) || "";
+      activeAccount = accounts.find((item) => item.id === activeId) || accounts[0];
+    }
+    function saveAccounts() {
+      localStorage.setItem(accountStoreKey, JSON.stringify(accounts.slice(0, 20)));
+      localStorage.setItem(`${accountStoreKey}.active`, activeAccount?.id || "local");
+    }
+    function renderAccounts() {
+      const select = $("accountSelect");
+      select.innerHTML = "";
+      for (const account of accounts) {
+        const option = document.createElement("option");
+        option.value = account.id;
+        option.textContent = account.label || account.id;
+        option.selected = account.id === activeAccount?.id;
+        select.appendChild(option);
+      }
+      $("currentAccountLabel").textContent = activeAccount?.label || "local account";
+      $("userId").value = activeAccount?.id || "local";
+    }
+    function switchAccount(accountId) {
+      accountRevision += 1;
+      activeAccount = accounts.find((item) => item.id === accountId) || accounts[0];
+      saveAccounts();
+      clearAccountView();
+      loadSessions();
+      if (sessions.length > 0) setActiveSession(sessions[0]);
+      else resetConversation();
+      renderAccounts();
+      refreshInspectors();
+    }
+    function clearAccountView() {
+      sessions = [];
+      activeSession = null;
+      lastCommitMemorySummary = null;
+      $("messages").innerHTML = "";
+      $("contextView").textContent = "切换账户后，将只显示当前账户下的会话上下文。";
+      $("tree").innerHTML = "";
+      $("fileContent").textContent = "点击文件查看内容";
+      show("events", {});
+      renderCommitMemoryDetails(null);
+      renderSessions();
+    }
+    async function createAccount() {
+      const revision = accountRevision;
+      $("createAccount").disabled = true;
+      try {
+        const tenant = await request("/api/auth/tenants", {method: "POST", body: "{}"});
+        if (!isCurrentAccount(revision)) return;
+        const tenantId = tenant.tenant?.tenant_id;
+        if (!tenantId) throw new Error("tenant creation returned no id");
+        const user = await request(`/api/auth/tenants/${encodeURIComponent(tenantId)}/users`, {
+          method: "POST",
+          body: "{}"
+        });
+        if (!isCurrentAccount(revision)) return;
+        const userId = user.user?.user_id;
+        if (!userId) throw new Error("user creation returned no id");
+        const key = await request(`/api/auth/tenants/${encodeURIComponent(tenantId)}/users/${encodeURIComponent(userId)}/key`, {
+          method: "POST",
+          body: "{}"
+        });
+        if (!isCurrentAccount(revision)) return;
+        if (!key.auth_key) throw new Error("auth key creation returned no key");
+        const label = `account ${accounts.filter((item) => item.id !== "local").length + 1}`;
+        activeAccount = {id: tenantId, label, tenantId, userId, authKey: key.auth_key};
+        accounts = [activeAccount, ...accounts];
+        accountRevision += 1;
+        saveAccounts();
+        clearAccountView();
+        renderAccounts();
+        resetConversation();
+        show("last", {account: label, status: "created"});
+      } finally {
+        $("createAccount").disabled = false;
+      }
+    }
+    async function forgetAccount() {
+      if (!activeAccount || activeAccount.id === "local") return;
+      const revision = accountRevision;
+      const accountId = activeAccount.id;
+      $("forgetAccount").disabled = true;
+      try {
+        await request("/api/auth/account/delete", {method: "POST", body: "{}"});
+        if (!isCurrentAccount(revision)) return;
+        accounts = accounts.filter((item) => item.id !== accountId);
+        localStorage.removeItem(`${sessionStoreKey}.${accountId}`);
+        activeAccount = accounts[0] || {id: "local", label: "local account", authKey: ""};
+        accountRevision += 1;
+        saveAccounts();
+        switchAccount(activeAccount.id);
+        show("last", {account: accountId, status: "deleted"});
+      } finally {
+        $("forgetAccount").disabled = false;
+      }
+    }
     function findSession(id) {
       return sessions.find((item) => item.id === id) || null;
     }
     function loadSessions() {
       try {
-        const parsed = JSON.parse(localStorage.getItem(sessionStoreKey) || "[]");
+        const parsed = JSON.parse(localStorage.getItem(accountSessionStoreKey()) || "[]");
         sessions = Array.isArray(parsed) ? parsed : [];
       } catch {
         sessions = [];
       }
     }
     function saveSessions() {
-      localStorage.setItem(sessionStoreKey, JSON.stringify(sessions.slice(0, 30)));
+      localStorage.setItem(accountSessionStoreKey(), JSON.stringify(sessions.slice(0, 30)));
+    }
+    function loadSessionsForAccount(accountId) {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(sessionStoreKeyFor(accountId)) || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    function saveSessionsForAccount(accountId, accountSessions) {
+      localStorage.setItem(sessionStoreKeyFor(accountId), JSON.stringify(accountSessions.slice(0, 30)));
+    }
+    function rememberMessageForAccount(accountId, targetSessionId, role, content) {
+      const accountSessions = loadSessionsForAccount(accountId);
+      const session = accountSessions.find((item) => item.id === targetSessionId);
+      if (!session) return;
+      session.messages = Array.isArray(session.messages) ? session.messages : [];
+      session.messages.push({role, content});
+      session.updatedAt = new Date().toISOString();
+      saveSessionsForAccount(accountId, [session, ...accountSessions.filter((item) => item.id !== session.id)]);
+    }
+    function rememberContextForAccount(accountId, targetSessionId, messages, trace = null) {
+      const accountSessions = loadSessionsForAccount(accountId);
+      const session = accountSessions.find((item) => item.id === targetSessionId);
+      if (!session) return;
+      session.context = messages;
+      session.contextTrace = trace;
+      session.updatedAt = new Date().toISOString();
+      saveSessionsForAccount(accountId, [session, ...accountSessions.filter((item) => item.id !== session.id)]);
     }
     function createConversation() {
       activeSession = {
@@ -1167,41 +1374,56 @@ INDEX_HTML = r"""<!doctype html>
       }
     }
     async function refreshTree() {
+      const revision = accountRevision;
       try {
         const uri = $("fsTarget").value.trim();
         const depth = $("fsDepth").value.trim() || "5";
-        currentTree = await fetch(`/agent/inspect/fs/tree?uri=${encodeURIComponent(uri)}&max_depth=${encodeURIComponent(depth)}`).then((r) => r.json());
+        currentTree = await fetch(`/agent/inspect/fs/tree?uri=${encodeURIComponent(uri)}&max_depth=${encodeURIComponent(depth)}`, {
+          headers: authHeaders()
+        }).then((r) => r.json());
+        if (!isCurrentAccount(revision)) return;
         if (currentTree.error) throw new Error(currentTree.message || currentTree.error);
         renderFs(currentTree.entries);
       } catch (error) {
+        if (!isCurrentAccount(revision)) return;
         $("tree").innerHTML = `<div class="fs-empty error">${escapeHtml(error.message)}</div>`;
       }
     }
     async function readFile(uri) {
+      const revision = accountRevision;
       try {
-        const data = await fetch(`/agent/inspect/fs/read?uri=${encodeURIComponent(uri)}`).then((r) => r.json());
+        const data = await fetch(`/agent/inspect/fs/read?uri=${encodeURIComponent(uri)}`, {
+          headers: authHeaders()
+        }).then((r) => r.json());
+        if (!isCurrentAccount(revision)) return;
         if (data.error) throw new Error(data.message || data.error);
         $("fileContent").textContent = data.text;
         show("last", data);
       } catch (error) {
+        if (!isCurrentAccount(revision)) return;
         $("fileContent").textContent = error.message;
       }
     }
     async function request(path, options = {}) {
+      const revision = accountRevision;
       const response = await fetch(path, {
-        headers: {"Content-Type": "application/json"},
+        headers: authHeaders({"Content-Type": "application/json"}),
         ...options
       });
       const data = await response.json();
-      show("last", data);
+      if (isCurrentAccount(revision)) show("last", data);
       if (!response.ok) throw new Error(data.message || data.error || response.statusText);
-      await refreshInspectors();
+      if (isCurrentAccount(revision)) await refreshInspectors();
       return data;
     }
     async function waitCommit(sessionIdForCommit, archiveId) {
+      const revision = accountRevision;
       for (let attempt = 0; attempt < 240; attempt += 1) {
-        const response = await fetch(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commits/${encodeURIComponent(archiveId)}`);
+        const response = await fetch(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commits/${encodeURIComponent(archiveId)}`, {
+          headers: authHeaders()
+        });
         const data = await response.json();
+        if (!isCurrentAccount(revision)) throw new Error("account switched");
         show("last", data);
         if (!response.ok || data.error) throw new Error(data.message || data.error || `commit status ${response.status}`);
         if (data.status?.status === "completed") return data.status;
@@ -1212,7 +1434,11 @@ INDEX_HTML = r"""<!doctype html>
       throw new Error(`commit timeout: ${archiveId}`);
     }
     async function fetchCommitMemories(sessionIdForCommit, commitId) {
-      const data = await fetch(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commits/${encodeURIComponent(commitId)}/memories`).then((r) => r.json());
+      const revision = accountRevision;
+      const data = await fetch(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commits/${encodeURIComponent(commitId)}/memories`, {
+        headers: authHeaders()
+      }).then((r) => r.json());
+      if (!isCurrentAccount(revision)) throw new Error("account switched");
       show("last", data);
       if (data.error) throw new Error(data.message || data.error);
       return data.summary || {memory_kinds: [], memories: []};
@@ -1249,30 +1475,39 @@ INDEX_HTML = r"""<!doctype html>
       `;
     }
     async function refreshInspectors() {
+      const revision = accountRevision;
       try {
         const config = await fetch("/agent/config").then((r) => r.json());
+        if (!isCurrentAccount(revision)) return;
         show("config", config);
         $("modelBadge").textContent = `${config.model?.provider || "模型"} / ${config.model?.model || "未知"}`;
         $("memoryModelLabel").textContent = `${config.model?.provider || "模型"} / ${config.model?.model || "未知"}`;
         $("status").textContent = `模型 ${config.model?.provider || ""} / EchoMemory ${sessionId()}`;
       } catch (error) {
+        if (!isCurrentAccount(revision)) return;
         show("config", {error: error.message});
         $("modelBadge").textContent = "模型不可用";
         $("status").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
       }
       try {
-        const runtime = await fetch("/agent/inspect/runtime").then((r) => r.json());
+        const runtime = await fetch("/agent/inspect/runtime", {headers: authHeaders()}).then((r) => r.json());
+        if (!isCurrentAccount(revision)) return;
         show("runtime", runtime);
       } catch (error) {
+        if (!isCurrentAccount(revision)) return;
         show("runtime", {error: error.message});
       }
+      if (!isCurrentAccount(revision)) return;
       syncFsTarget();
       $("memorySessionLabel").textContent = sessionId() || "-";
       $("memoryTargetLabel").textContent = $("fsTarget").value || "echo://sessions/-";
       await refreshTree();
       try {
-        show("events", await fetch("/agent/inspect/events").then((r) => r.json()));
+        const events = await fetch("/agent/inspect/events", {headers: authHeaders()}).then((r) => r.json());
+        if (!isCurrentAccount(revision)) return;
+        show("events", events);
       } catch (error) {
+        if (!isCurrentAccount(revision)) return;
         show("events", {error: error.message});
       }
     }
@@ -1280,6 +1515,8 @@ INDEX_HTML = r"""<!doctype html>
       resetConversation();
     };
     async function sendChatMessage(content, options = {}) {
+      const revision = accountRevision;
+      const originAccountId = activeAccount?.id || "local";
       const activeSessionId = ensureSessionId();
       const targetSession = findSession(activeSessionId);
       if (targetSession && targetSession.title === "新对话") {
@@ -1305,6 +1542,11 @@ INDEX_HTML = r"""<!doctype html>
             stream: false
           })
         });
+        if (!isCurrentAccount(revision)) {
+          rememberContextForAccount(originAccountId, activeSessionId, data.messages, data.context_trace);
+          rememberMessageForAccount(originAccountId, activeSessionId, "assistant", data.assistant.content);
+          return data;
+        }
         rememberContextFor(activeSessionId, data.messages, data.context_trace);
         rememberMessageFor(activeSessionId, "assistant", data.assistant.content);
         if (activeSession?.id === activeSessionId) {
@@ -1317,6 +1559,10 @@ INDEX_HTML = r"""<!doctype html>
         }
         return data;
       } catch (error) {
+        if (!isCurrentAccount(revision)) {
+          rememberMessageForAccount(originAccountId, activeSessionId, "tool", `请求失败：${error.message}`);
+          throw error;
+        }
         rememberMessageFor(activeSessionId, "tool", `请求失败：${error.message}`);
         if (activeSession?.id === activeSessionId) {
           if (pending.isConnected) {
@@ -1376,6 +1622,21 @@ INDEX_HTML = r"""<!doctype html>
       }
     }
     $("refresh").onclick = refreshInspectors;
+    $("accountSelect").onchange = () => switchAccount($("accountSelect").value);
+    $("createAccount").onclick = async () => {
+      try {
+        await createAccount();
+      } catch (error) {
+        show("last", {error: error.message});
+      }
+    };
+    $("forgetAccount").onclick = async () => {
+      try {
+        await forgetAccount();
+      } catch (error) {
+        show("last", {error: error.message});
+      }
+    };
     $("refreshTree").onclick = refreshTree;
     $("treeMode").onclick = () => { fsMode = "tree"; renderFs(currentTree.entries); };
     $("flatMode").onclick = () => { fsMode = "flat"; renderFs(currentTree.entries); };
@@ -1402,6 +1663,8 @@ INDEX_HTML = r"""<!doctype html>
         $("sendChat").click();
       }
     });
+    loadAccounts();
+    renderAccounts();
     loadSessions();
     if (sessions.length > 0) setActiveSession(sessions[0]);
     else resetConversation();
@@ -1464,11 +1727,15 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         try:
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
             target = urljoin(self.server.echomem_url, self.path.lstrip("/"))
+            headers = {"Content-Type": self.headers.get("Content-Type", "application/json")}
+            auth_key = self.headers.get("X-Auth-Key", "").strip()
+            if auth_key:
+                headers["X-Auth-Key"] = auth_key
             request = Request(
                 target,
                 data=body if self.command in {"POST", "PUT", "PATCH"} else None,
                 method=self.command,
-                headers={"Content-Type": self.headers.get("Content-Type", "application/json")},
+                headers=headers,
             )
             with urlopen(request, timeout=5) as response:
                 response_body = response.read()
@@ -1484,7 +1751,7 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
     def _agent_chat(self) -> None:
         try:
             payload = self._read_json()
-            data = AgentChatService(self.server.config).chat(payload)
+            data = AgentChatService(self._request_config()).chat(payload)
             self._send_json(HTTPStatus.OK, data)
         except ValueError as exc:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "bad_request", "message": str(exc)})
@@ -1499,12 +1766,21 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             session_id = str(payload.get("session_id") or "").strip()
             if not session_id:
                 raise ValueError("session_id is required")
-            data = AgentChatService(self.server.config).memory.commit(session_id)
+            data = AgentChatService(self._request_config()).memory.commit(session_id)
             self._send_json(HTTPStatus.OK, data)
         except ValueError as exc:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "bad_request", "message": str(exc)})
         except EchoMemoryClientError as exc:
             self._send_json(HTTPStatus.BAD_GATEWAY, {"error": "echomemory_error", "message": str(exc)})
+
+    def _request_config(self) -> AgentConfig:
+        auth_key = self.headers.get("X-Auth-Key", "").strip()
+        if not auth_key:
+            return self.server.config
+        return replace(
+            self.server.config,
+            echomemory=replace(self.server.config.echomemory, auth_key=auth_key),
+        )
 
     def _read_json(self) -> dict[str, Any]:
         body = self.rfile.read(int(self.headers.get("Content-Length", "0")))

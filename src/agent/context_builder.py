@@ -75,20 +75,9 @@ class ContextBuilder:
                     "</behavior_policy>"
                 ),
             },
-            {
-                "role": "system",
-                "content": (
-                    "<memory_contract>\n"
-                    "EchoMemory 检索结果是候选上下文，不是绝对事实。\n"
-                    "只使用与当前请求相关的记忆；对低置信度或可能过期的记忆要谨慎处理。\n"
-                    "不要把不确定的检索记忆包装成确定事实。\n"
-                    "</memory_contract>"
-                ),
-            },
         ]
         _add_trace_layer(trace_layers, "Agent 章程", "静态规则", [0], messages)
         _add_trace_layer(trace_layers, "行为规则", "静态规则", [1], messages)
-        _add_trace_layer(trace_layers, "记忆使用规则", "静态规则", [2], messages)
 
         items = _items_from_retrieval(retrieval)
         if items:

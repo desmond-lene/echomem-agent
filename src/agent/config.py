@@ -23,6 +23,7 @@ class ServerConfig:
 class EchoMemoryConfig:
     base_url: str = DEFAULT_ECHOMEM_URL
     timeout_seconds: float = 15
+    auth_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,8 @@ class AgentConfig:
         data = asdict(self)
         if data["model"].get("api_key"):
             data["model"]["api_key"] = "***"
+        if data["echomemory"].get("auth_key"):
+            data["echomemory"]["auth_key"] = "***"
         return data
 
 
@@ -94,6 +97,7 @@ def load_config(config_path: str | None = None, *, echomem_url: str | None = Non
             base_url=echomem_url
             or os.environ.get("ECHOMEM_URL")
             or config.echomemory.base_url,
+            auth_key=os.environ.get("ECHOMEM_AUTH_KEY", config.echomemory.auth_key),
         ),
         model=replace(
             config.model,

@@ -19,7 +19,7 @@ class FakeEchoMemoryHandler(BaseHTTPRequestHandler):
     calls: list[dict[str, object]] = []
 
     def do_GET(self) -> None:
-        self.calls.append({"method": "GET", "path": self.path, "payload": {}})
+        self.calls.append({"method": "GET", "path": self.path, "payload": {}, "headers": dict(self.headers)})
         if self.path == "/agent/inspect/runtime":
             self._send_json(
                 HTTPStatus.OK,
@@ -95,11 +95,20 @@ class FakeEchoMemoryHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         body = self.rfile.read(int(self.headers.get("Content-Length", "0") or "0"))
         payload = json.loads(body.decode("utf-8")) if body else {}
-        self.calls.append({"method": "POST", "path": self.path, "payload": payload})
+        self.calls.append({"method": "POST", "path": self.path, "payload": payload, "headers": dict(self.headers)})
+        if self.path == "/api/auth/tenants":
+            self._send_json(HTTPStatus.OK, {"tenant": {"tenant_id": "tenant_test"}})
+            return
+        if self.path == "/api/auth/tenants/tenant_test/users":
+            self._send_json(HTTPStatus.OK, {"user": {"user_id": "user_test"}})
+            return
+        if self.path == "/api/auth/tenants/tenant_test/users/user_test/key":
+            self._send_json(HTTPStatus.OK, {"auth_key": "ek_test"})
+            return
         if self.path == "/api/sessions/open":
             self._send_json(
                 HTTPStatus.OK,
-                {"scope": {"user_id": "alice", "agent_id": "demo-agent", "session_id": "chat-001"}},
+                {"scope": {"session_id": "chat-001"}},
             )
             return
         if self.path == "/api/sessions/chat-001/messages":
@@ -196,6 +205,9 @@ class AgentServerTests(unittest.TestCase):
             self.assertIn("文件系统目标", html)
             self.assertIn("平铺展开", html)
             self.assertIn("本次 commit 抽取了", html)
+            self.assertIn("accountSelect", html)
+            self.assertIn("createAccount", html)
+            self.assertIn("currentAccountLabel", html)
         finally:
             server.shutdown()
             server.server_close()
@@ -215,12 +227,17 @@ class AgentServerTests(unittest.TestCase):
             opened = self._post_json(
                 f"{base_url}/api/sessions/open",
                 {"user_id": "alice", "agent_id": "demo-agent", "session_id": "chat-001"},
+                headers={"X-Auth-Key": "ek_proxy"},
             )
             self.assertEqual(opened["scope"]["session_id"], "chat-001")
+            self.assertEqual(FakeEchoMemoryHandler.calls[0]["headers"].get("X-Auth-Key"), "ek_proxy")
 
             with urlopen(f"{base_url}/agent/inspect/runtime", timeout=2) as response:
                 runtime_payload = json.loads(response.read().decode("utf-8"))
             self.assertEqual(runtime_payload["features"]["session_service"], "ready:D03")
+
+            created = self._post_json(f"{base_url}/api/auth/tenants", {})
+            self.assertEqual(created["tenant"]["tenant_id"], "tenant_test")
 
             with urlopen(f"{base_url}/api/sessions/chat-001/commits/archive_001/memories", timeout=2) as response:
                 summary = json.loads(response.read().decode("utf-8"))
@@ -259,6 +276,7 @@ class AgentServerTests(unittest.TestCase):
                     "session_id": "chat-001",
                     "message": "帮我整理 D03 的提交方案",
                 },
+                headers={"X-Auth-Key": "ek_chat"},
             )
             self.assertEqual(response["assistant"]["content"], "这是模型生成的 D03 提交方案。")
             trace = response["context_trace"]
@@ -274,14 +292,18 @@ class AgentServerTests(unittest.TestCase):
                 "/api/retrieval/search",
                 "/api/sessions/chat-001/messages",
             ])
+            self.assertNotIn("user_id", FakeEchoMemoryHandler.calls[0]["payload"])
+            self.assertNotIn("user_id", FakeEchoMemoryHandler.calls[3]["payload"])
+            self.assertEqual(FakeEchoMemoryHandler.calls[0]["headers"].get("X-Auth-Key"), "ek_chat")
+            self.assertEqual(FakeEchoMemoryHandler.calls[3]["headers"].get("X-Auth-Key"), "ek_chat")
             self.assertEqual(FakeModelHandler.calls[0]["path"], "/v1/chat/completions")
             model_payload = FakeModelHandler.calls[0]["payload"]
             self.assertEqual(model_payload["model"], "fake-chat")
             roles = [message["role"] for message in model_payload["messages"]]
-            self.assertEqual(roles, ["system", "system", "system", "system", "user", "assistant", "user"])
+            self.assertEqual(roles, ["system", "system", "system", "user", "assistant", "user"])
             joined_context = "\n".join(message["content"] for message in model_payload["messages"])
             self.assertIn("你是 EchoMemory Agent", joined_context)
-            self.assertIn("EchoMemory 检索结果是候选上下文", joined_context)
+            self.assertNotIn("<memory_contract>", joined_context)
             self.assertNotIn("session_id: chat-001", joined_context)
             self.assertNotIn("timestamp_utc", joined_context)
             self.assertNotIn("<session_history>", joined_context)
@@ -358,11 +380,19 @@ class AgentServerTests(unittest.TestCase):
             model.server_close()
             model_thread.join(timeout=2)
 
-    def _post_json(self, url: str, payload: dict[str, object]) -> dict[str, object]:
+    def _post_json(
+        self,
+        url: str,
+        payload: dict[str, object],
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> dict[str, object]:
+        request_headers = {"Content-Type": "application/json"}
+        request_headers.update(headers or {})
         request = Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=request_headers,
             method="POST",
         )
         with urlopen(request, timeout=2) as response:

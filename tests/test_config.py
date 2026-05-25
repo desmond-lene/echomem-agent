@@ -79,6 +79,12 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.model.base_url, "http://127.0.0.1:9999/v1")
         self.assertEqual(config.model.model, "fake-chat")
 
+    def test_echomemory_auth_key_loads_from_env(self) -> None:
+        with patch.dict("os.environ", {"ECHOMEM_AUTH_KEY": "ek_test"}, clear=True):
+            config = load_config()
+
+        self.assertEqual(config.echomemory.auth_key, "ek_test")
+
     def test_context_config_loads_from_agent_config(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "agent.local.json"
