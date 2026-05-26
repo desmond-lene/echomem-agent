@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import threading
 import unittest
 from http import HTTPStatus
@@ -324,6 +325,63 @@ class AgentServerTests(unittest.TestCase):
             echomem.server_close()
             echomem_thread.join(timeout=2)
 
+    def test_agent_context_previews_messages_without_model_or_message_writes(self) -> None:
+        FakeEchoMemoryHandler.calls = []
+        FakeModelHandler.calls = []
+        echomem = ThreadingHTTPServer(("127.0.0.1", 0), FakeEchoMemoryHandler)
+        model = ThreadingHTTPServer(("127.0.0.1", 0), FakeModelHandler)
+        echomem_thread = threading.Thread(target=echomem.serve_forever, daemon=True)
+        model_thread = threading.Thread(target=model.serve_forever, daemon=True)
+        echomem_thread.start()
+        model_thread.start()
+
+        env = {
+            "OPENAI_BASE_URL": f"http://127.0.0.1:{model.server_port}/v1",
+            "OPENAI_API_KEY": "test-key",
+            "OPENAI_MODEL": "fake-chat",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            agent = create_agent_server(port=0, echomem_url=f"http://127.0.0.1:{echomem.server_port}")
+        agent_thread = threading.Thread(target=agent.serve_forever, daemon=True)
+        agent_thread.start()
+
+        try:
+            response = self._post_json(
+                f"http://127.0.0.1:{agent.server_port}/agent/context",
+                {
+                    "user_id": "alice",
+                    "agent_id": "demo-agent",
+                    "session_id": "chat-001",
+                    "message": "帮我整理 D03 的提交方案",
+                },
+                headers={"X-Auth-Key": "ek_context"},
+            )
+            self.assertEqual(response["session_id"], "chat-001")
+            self.assertIn("messages", response)
+            self.assertIn("context_trace", response)
+            self.assertNotIn("assistant", response)
+            self.assertEqual(FakeModelHandler.calls, [])
+            self.assertEqual([call["path"] for call in FakeEchoMemoryHandler.calls], [
+                "/api/sessions/open",
+                "/agent/inspect/fs/read?uri=echo%3A%2F%2Fsessions%2Fchat-001%2Fcurrent%2Fmessages.jsonl",
+                "/api/retrieval/search",
+            ])
+            self.assertEqual(FakeEchoMemoryHandler.calls[0]["headers"].get("X-Auth-Key"), "ek_context")
+            self.assertEqual(FakeEchoMemoryHandler.calls[2]["headers"].get("X-Auth-Key"), "ek_context")
+            joined_context = "\n".join(message["content"] for message in response["messages"])
+            self.assertIn("<current_request>\n帮我整理 D03 的提交方案\n</current_request>", joined_context)
+            self.assertIn("用户希望方案简洁", joined_context)
+        finally:
+            agent.shutdown()
+            agent.server_close()
+            agent_thread.join(timeout=2)
+            echomem.shutdown()
+            echomem.server_close()
+            echomem_thread.join(timeout=2)
+            model.shutdown()
+            model.server_close()
+            model_thread.join(timeout=2)
+
     def test_agent_chat_tolerates_missing_session_history_file(self) -> None:
         FakeEchoMemoryHandler.calls = []
         FakeModelHandler.calls = []
@@ -379,6 +437,91 @@ class AgentServerTests(unittest.TestCase):
             model.shutdown()
             model.server_close()
             model_thread.join(timeout=2)
+
+    def test_locomo_page_dataset_and_run_api(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dataset_dir = f"{tmp}/locomo"
+            config_path = f"{tmp}/agent.json"
+            self._write_locomo_fixture(dataset_dir)
+            with open(config_path, "w", encoding="utf-8") as handle:
+                json.dump(
+                    {
+                        "locomo": {
+                            "data_dir": dataset_dir,
+                            "auto_download": False,
+                            "run_worker_enabled": False,
+                        }
+                    },
+                    handle,
+                )
+
+            agent = create_agent_server(port=0, echomem_url="http://127.0.0.1:1", config_path=config_path)
+            agent_thread = threading.Thread(target=agent.serve_forever, daemon=True)
+            agent_thread.start()
+
+            try:
+                base_url = f"http://127.0.0.1:{agent.server_port}"
+                with urlopen(f"{base_url}/agent/locomo", timeout=2) as response:
+                    html = response.read().decode("utf-8")
+                self.assertEqual(response.status, HTTPStatus.OK)
+                self.assertIn("LoCoMo 评测台", html)
+
+                with urlopen(f"{base_url}/agent/locomo/dataset", timeout=2) as response:
+                    index = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(index["samples"][0]["sample_id"], "sample_1")
+                self.assertEqual(index["samples"][0]["qa_count"], 1)
+
+                with urlopen(f"{base_url}/agent/locomo/dataset/sample_1", timeout=2) as response:
+                    sample = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(sample["sessions"][0]["turns"][0]["dia_id"], "D1:1")
+                self.assertEqual(sample["qa"][0]["id"], "qa_001")
+
+                run = self._post_json(
+                    f"{base_url}/agent/locomo/runs",
+                    {"sample_ids": ["sample_1"], "qa_ids": {"sample_1": ["qa_001"]}},
+                )
+                self.assertEqual(run["status"], "queued")
+                self.assertEqual(run["progress"]["total"], 1)
+
+                with urlopen(f"{base_url}/agent/locomo/runs", timeout=2) as response:
+                    runs = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(runs["runs"][0]["run_id"], run["run_id"])
+            finally:
+                agent.shutdown()
+                agent.server_close()
+                agent_thread.join(timeout=2)
+
+    def _write_locomo_fixture(self, dataset_dir: str) -> None:
+        from pathlib import Path
+
+        path = Path(dataset_dir)
+        path.mkdir(parents=True, exist_ok=True)
+        payload = [
+            {
+                "sample_id": "sample_1",
+                "conversation": {
+                    "speaker_a": "Caroline",
+                    "speaker_b": "Melanie",
+                    "session_1_date_time": "2023-01-01",
+                    "session_1": [
+                        {"speaker": "Caroline", "dia_id": "D1:1", "text": "I booked the pottery class."},
+                        {"speaker": "Melanie", "dia_id": "D1:2", "text": "That sounds useful."},
+                    ],
+                },
+                "observation": {"session_1_observation": "Caroline booked a pottery class."},
+                "session_summary": {"session_1_summary": "They discussed pottery."},
+                "event_summary": {"events_session_1": ["Caroline booked a class."]},
+                "qa": [
+                    {
+                        "question": "What class did Caroline book?",
+                        "answer": "pottery class",
+                        "category": "single-hop",
+                        "evidence": ["D1:1"],
+                    }
+                ],
+            }
+        ]
+        (path / "locomo10.json").write_text(json.dumps(payload), encoding="utf-8")
 
     def _post_json(
         self,

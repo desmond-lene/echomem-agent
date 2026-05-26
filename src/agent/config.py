@@ -58,12 +58,23 @@ class ContextConfig:
 
 
 @dataclass(frozen=True)
+class LocomoConfig:
+    dataset_url: str = "https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json"
+    data_dir: str = "data/locomo"
+    auto_download: bool = True
+    run_worker_enabled: bool = True
+    commit_wait_seconds: float = 600
+    commit_poll_seconds: float = 2
+
+
+@dataclass(frozen=True)
 class AgentConfig:
     server: ServerConfig = ServerConfig()
     echomemory: EchoMemoryConfig = EchoMemoryConfig()
     model: ModelConfig = ModelConfig()
     chat: ChatConfig = ChatConfig()
     context: ContextConfig = ContextConfig()
+    locomo: LocomoConfig = LocomoConfig()
 
     def public_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -88,6 +99,7 @@ def load_config(config_path: str | None = None, *, echomem_url: str | None = Non
         model=_build(ModelConfig, data.get("model", {})),
         chat=_build(ChatConfig, data.get("chat", {})),
         context=_build(ContextConfig, data.get("context", {})),
+        locomo=_build(LocomoConfig, data.get("locomo", {})),
     )
 
     config = replace(
@@ -104,6 +116,13 @@ def load_config(config_path: str | None = None, *, echomem_url: str | None = Non
             base_url=os.environ.get("OPENAI_BASE_URL", config.model.base_url),
             api_key=os.environ.get("OPENAI_API_KEY", config.model.api_key),
             model=os.environ.get("OPENAI_MODEL", config.model.model),
+        ),
+        locomo=replace(
+            config.locomo,
+            dataset_url=os.environ.get("LOCOMO_DATASET_URL", config.locomo.dataset_url),
+            data_dir=os.environ.get("LOCOMO_DATA_DIR", config.locomo.data_dir),
+            commit_wait_seconds=float(os.environ.get("LOCOMO_COMMIT_WAIT_SECONDS", config.locomo.commit_wait_seconds)),
+            commit_poll_seconds=float(os.environ.get("LOCOMO_COMMIT_POLL_SECONDS", config.locomo.commit_poll_seconds)),
         ),
     )
     config = _apply_observer_alibaba_config(config)

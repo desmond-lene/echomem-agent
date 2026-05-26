@@ -11,14 +11,17 @@ import os
 from dataclasses import replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from .chat_service import AgentChatService
 from .config import AgentConfig, load_config
 from .echomemory_client import EchoMemoryClientError
+from .locomo_dataset import LocomoDatasetError, LocomoDatasetService
+from .locomo_eval_service import LocomoEvalError, LocomoEvalService
 from .model_client import ModelClientError
 INDEX_HTML = r"""<!doctype html>
 <html lang="zh-CN">
@@ -770,6 +773,7 @@ INDEX_HTML = r"""<!doctype html>
         <strong class="current-account" id="currentAccountLabel">local account</strong>
         <select id="accountSelect" title="切换账户"></select>
         <button id="createAccount">新建账户</button>
+        <button id="ensureAccount">查找/创建</button>
         <button id="forgetAccount">移除</button>
       </div>
       <button id="refresh">刷新状态</button>
@@ -787,6 +791,7 @@ INDEX_HTML = r"""<!doctype html>
           <div class="nav-list">
             <button class="nav-item active" id="chatNav">◇ 对话</button>
             <button class="nav-item" id="memoryNav">◎ EchoMemory</button>
+            <button class="nav-item" id="locomoNav">◎ LoCoMo 评测</button>
           </div>
           <div class="nav-section-title">最近会话</div>
           <div id="sessionList"></div>
@@ -940,21 +945,21 @@ INDEX_HTML = r"""<!doctype html>
     let activeAccount = null;
     let accountRevision = 0;
     const memoryTestScenarios = {
-      profile: ["我是后端工程师，长期维护 EchoMemory 记忆系统。"],
-      preference: ["我喜欢你以后默认先给结论，再给简洁步骤。"],
-      entity: ["EchoMemory 项目中的 TreeMemoryEngine 模块负责把会话归档抽取成结构化记忆。"],
-      event: ["决定先完成 simple 引擎验证，再推进召回优化。"],
-      agent_case: ["这个任务的问题是 commit 结果看不到记忆类型，修复后结果是页面可以展示本轮抽取详情。"],
-      pattern: ["每次修改公开接口后的固定流程是补单测、跑完整测试、再重启服务。"],
-      tool_experience: ["使用 rg 命令定位文本，遇到路径过宽时先收窄目录再重试。"],
+      profile: ["我是后端工程师，长期负责 EchoMemory 记忆系统的后端架构、会话归档和记忆抽取链路。"],
+      preference: ["我喜欢你以后默认先给结论，再给简洁步骤；如果需要展开，再补充关键原因和验证方式。"],
+      entity: ["EchoMemory 项目里的 TreeMemoryEngine 是结构化长期记忆引擎，负责在 session commit 后读取会话归档，并生成 profile、preference、entity、event、case、pattern 和 tool 相关记忆。"],
+      event: ["今天决定把 EchoMemory 的召回优化放到下一阶段；本阶段优先完成 TreeMemoryEngine 的 commit 抽取验证，确认 event 类型可以从会话归档生成。"],
+      agent_case: ["这个任务遇到的问题是 commit 后页面只显示没有抽取记忆；原因是测试句子信息太弱且当前运行的是 tree 引擎；解决办法是把测试对话改成包含明确上下文、原因和结果的高质量样例；结果是 commit 摘要能显示本轮抽取出的记忆类型。"],
+      pattern: ["每次修改公开接口或记忆抽取规则后，固定流程是先补充针对性的单元测试，再跑相关测试套件，最后重启服务并用页面上的记忆测试确认 commit 结果。"],
+      tool_experience: ["[ToolCall] rg -n \"本次 commit 没有抽取出长期记忆|memory_kinds\" src e:/echomem-workspace/echomemory\n工具经验：使用 rg 定位记忆抽取问题时，先查精确提示文案和关键字段；如果路径范围太大导致结果噪声高，就收窄到 src/agent/server.py、text_processor.py 和 session_service.py。"],
       all: [
-        "我是后端工程师，目标是把 EchoMemory 做成稳定的记忆系统。",
-        "我喜欢你以后默认用简洁中文和分步骤说明。",
-        "TreeMemoryEngine 模块负责把会话归档抽取成结构化记忆。",
-        "决定先完成 simple 引擎验证，再推进召回优化。",
-        "这个任务的问题是接口返回不透明，修复后结果是可以看到 commit 记忆类型。",
-        "每次修改公开接口后的固定流程是补单测、跑测试、再重启服务。",
-        "使用 rg 命令定位文本，遇到参数报错时先收窄路径再重试。"
+        "我是后端工程师，长期负责 EchoMemory 记忆系统的后端架构、会话归档和记忆抽取链路。",
+        "我喜欢你以后默认先给结论，再给简洁步骤；如果需要展开，再补充关键原因和验证方式。",
+        "EchoMemory 项目里的 TreeMemoryEngine 是结构化长期记忆引擎，负责在 session commit 后读取会话归档，并生成 profile、preference、entity、event、case、pattern 和 tool 相关记忆。",
+        "今天决定把 EchoMemory 的召回优化放到下一阶段；本阶段优先完成 TreeMemoryEngine 的 commit 抽取验证，确认 event 类型可以从会话归档生成。",
+        "这个任务遇到的问题是 commit 后页面只显示没有抽取记忆；原因是测试句子信息太弱且当前运行的是 tree 引擎；解决办法是把测试对话改成包含明确上下文、原因和结果的高质量样例；结果是 commit 摘要能显示本轮抽取出的记忆类型。",
+        "每次修改公开接口或记忆抽取规则后，固定流程是先补充针对性的单元测试，再跑相关测试套件，最后重启服务并用页面上的记忆测试确认 commit 结果。",
+        "[ToolCall] rg -n \"本次 commit 没有抽取出长期记忆|memory_kinds\" src e:/echomem-workspace/echomemory\n工具经验：使用 rg 定位记忆抽取问题时，先查精确提示文案和关键字段；如果路径范围太大导致结果噪声高，就收窄到 src/agent/server.py、text_processor.py 和 session_service.py。"
       ]
     };
     const sessionStoreKey = "echomem-agent.sessions.v1";
@@ -1070,6 +1075,39 @@ INDEX_HTML = r"""<!doctype html>
         show("last", {account: label, status: "created"});
       } finally {
         $("createAccount").disabled = false;
+      }
+    }
+    async function ensureNamedAccount(label = "locomo") {
+      const data = await request("/agent/accounts/ensure", {
+        method: "POST",
+        body: JSON.stringify({label})
+      });
+      const account = data.account;
+      if (!account?.authKey) throw new Error("account ensure returned no authKey");
+      const existing = accounts.find((item) => item.id === account.id || item.label === account.label);
+      activeAccount = {
+        id: account.id,
+        label: account.label,
+        tenantId: account.tenantId,
+        userId: account.userId,
+        authKey: account.authKey
+      };
+      accounts = existing
+        ? [activeAccount, ...accounts.filter((item) => item !== existing)]
+        : [activeAccount, ...accounts];
+      accountRevision += 1;
+      saveAccounts();
+      clearAccountView();
+      renderAccounts();
+      resetConversation();
+      show("last", {account: activeAccount.label, status: data.created ? "created" : "found"});
+    }
+    async function ensureLocomoAccountOnStartup() {
+      if (accounts.some((item) => item.label === "locomo" || item.id === "locomo")) return;
+      try {
+        await ensureNamedAccount("locomo");
+      } catch (error) {
+        show("last", {warning: `locomo account ensure failed: ${error.message}`});
       }
     }
     async function forgetAccount() {
@@ -1406,11 +1444,22 @@ INDEX_HTML = r"""<!doctype html>
     }
     async function request(path, options = {}) {
       const revision = accountRevision;
-      const response = await fetch(path, {
-        headers: authHeaders({"Content-Type": "application/json"}),
-        ...options
-      });
-      const data = await response.json();
+      let response;
+      try {
+        response = await fetch(path, {
+          headers: authHeaders({"Content-Type": "application/json"}),
+          ...options
+        });
+      } catch (error) {
+        throw new Error(`无法连接 Agent 服务：${error.message}`);
+      }
+      const text = await response.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (error) {
+        data = {error: "invalid_json_response", message: text || response.statusText};
+      }
       if (isCurrentAccount(revision)) show("last", data);
       if (!response.ok) throw new Error(data.message || data.error || response.statusText);
       if (isCurrentAccount(revision)) await refreshInspectors();
@@ -1531,16 +1580,28 @@ INDEX_HTML = r"""<!doctype html>
       pending.innerHTML = `<div class="meta">助手</div>生成中...`;
       $("messages").appendChild(pending);
       $("chatScroll").scrollTop = $("chatScroll").scrollHeight;
+      const chatPayload = {
+        user_id: $("userId").value.trim(),
+        agent_id: $("agentId").value.trim(),
+        session_id: activeSessionId,
+        message: content,
+        stream: false
+      };
       try {
+        $("contextView").textContent = "正在组装本轮模型上下文...";
+        const preview = await request("/agent/context", {
+          method: "POST",
+          body: JSON.stringify(chatPayload)
+        });
+        if (!isCurrentAccount(revision)) {
+          rememberContextForAccount(originAccountId, activeSessionId, preview.messages, preview.context_trace);
+        } else {
+          rememberContextFor(activeSessionId, preview.messages, preview.context_trace);
+          if (activeSession?.id === activeSessionId) showContext(preview.messages, preview.context_trace);
+        }
         const data = await request("/agent/chat", {
           method: "POST",
-          body: JSON.stringify({
-            user_id: $("userId").value.trim(),
-            agent_id: $("agentId").value.trim(),
-            session_id: activeSessionId,
-            message: content,
-            stream: false
-          })
+          body: JSON.stringify(chatPayload)
         });
         if (!isCurrentAccount(revision)) {
           rememberContextForAccount(originAccountId, activeSessionId, data.messages, data.context_trace);
@@ -1630,6 +1691,14 @@ INDEX_HTML = r"""<!doctype html>
         show("last", {error: error.message});
       }
     };
+    $("ensureAccount").onclick = async () => {
+      const label = prompt("账户标签", "locomo") || "locomo";
+      try {
+        await ensureNamedAccount(label.trim() || "locomo");
+      } catch (error) {
+        show("last", {error: error.message});
+      }
+    };
     $("forgetAccount").onclick = async () => {
       try {
         await forgetAccount();
@@ -1646,6 +1715,7 @@ INDEX_HTML = r"""<!doctype html>
     };
     $("chatNav").onclick = () => setSideView("context");
     $("memoryNav").onclick = () => setSideView("memory");
+    $("locomoNav").onclick = () => { location.href = "/agent/locomo"; };
     $("memoryRefresh").onclick = refreshInspectors;
     $("memoryChip").onclick = () => $("userText").value = "请基于 EchoMemory 检索结果，帮我总结当前会话中的关键记忆。";
     $("memoryTestChip").onclick = runMemoryTest;
@@ -1665,10 +1735,224 @@ INDEX_HTML = r"""<!doctype html>
     });
     loadAccounts();
     renderAccounts();
+    ensureLocomoAccountOnStartup().finally(() => renderAccounts());
     loadSessions();
     if (sessions.length > 0) setActiveSession(sessions[0]);
     else resetConversation();
     refreshInspectors();
+  </script>
+</body>
+</html>"""
+
+LOCOMO_HTML = r"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LoCoMo 评测台</title>
+  <style>
+    :root { --ink:#182235; --muted:#66758b; --line:#d7e0ec; --blue:#2357c6; --green:#16734d; --orange:#a65a16; --red:#a23a3a; }
+    * { box-sizing: border-box; }
+    body { margin:0; color:var(--ink); background:#eef1f6; font-family:"Segoe UI","Microsoft YaHei",Arial,sans-serif; letter-spacing:0; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 18px; border-bottom:1px solid var(--line); background:#fff; }
+    h1 { margin:0; font-size:20px; }
+    h3 { margin:16px 0 8px; }
+    button,input { font:inherit; }
+    button { min-height:32px; padding:6px 10px; border:1px solid #c6d2e3; border-radius:6px; background:#fff; color:#24344f; cursor:pointer; font-weight:700; }
+    button.primary { border-color:var(--blue); background:var(--blue); color:#fff; }
+    button:disabled { cursor:wait; opacity:.65; }
+    input { width:100%; min-height:34px; padding:6px 9px; border:1px solid #c6d2e3; border-radius:6px; background:#fff; }
+    label { display:grid; gap:5px; color:var(--muted); font-size:12px; font-weight:700; }
+    main { display:grid; grid-template-columns:300px minmax(520px,1fr) 420px; gap:12px; padding:12px; min-height:calc(100vh - 61px); }
+    section { min-width:0; border:1px solid var(--line); border-radius:8px; background:#fff; overflow:hidden; }
+    .head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px; border-bottom:1px solid var(--line); background:#fbfcff; }
+    .head h2 { margin:0; font-size:16px; }
+    .status,.muted { color:var(--muted); font-size:12px; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line); background:#f7f9fd; }
+    .body { padding:12px; }
+    .stack { display:grid; gap:10px; }
+    .sample,.qa,.run,.metric,.event { padding:10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+    .sample.active,.qa.active { border-color:var(--blue); background:#edf4ff; }
+    .row { display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:800; }
+    .tag { display:inline-flex; align-items:center; padding:2px 7px; border-radius:999px; background:#eef2f7; color:#43536d; font-size:12px; font-weight:800; }
+    .tag.good { background:#edf8f1; color:var(--green); }
+    .tag.warn { background:#fff4e4; color:var(--orange); }
+    .tag.bad { background:#fff0f0; color:var(--red); }
+    .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .metric strong { display:block; font-size:22px; line-height:1.15; }
+    .tabs { display:flex; border:1px solid #c6d2e3; border-radius:7px; overflow:hidden; }
+    .tabs button { border:0; border-right:1px solid #c6d2e3; border-radius:0; }
+    .tabs button:last-child { border-right:0; }
+    .tabs button.active { background:var(--blue); color:#fff; }
+    .scroll { max-height:520px; overflow:auto; }
+    .turn { max-width:88%; margin:8px 0; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; font-size:13px; line-height:1.45; }
+    .turn.alt { margin-left:auto; border-color:#c7d8ff; background:#edf4ff; }
+    .answer { border-color:#cce9d9; background:#edf8f1; }
+    pre { white-space:pre-wrap; margin:0; font-family:"Cascadia Code",Consolas,monospace; font-size:12px; line-height:1.5; }
+    .error { color:var(--red); }
+    .hidden { display:none; }
+    @media (max-width:1120px) { main { grid-template-columns:1fr; } .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>LoCoMo 评测台</h1><div class="status" id="datasetStatus">加载数据集中...</div></div>
+    <div style="display:flex;gap:8px;align-items:center;"><button id="sync">刷新数据集</button><button onclick="location.href='/'">返回对话</button></div>
+  </header>
+  <main>
+    <section>
+      <div class="head"><h2>样本</h2><span class="tag" id="sampleCount">0</span></div>
+      <div class="toolbar"><input id="sampleSearch" placeholder="搜索 sample / speaker" /></div>
+      <div class="body scroll"><div class="stack" id="samples"></div></div>
+    </section>
+    <section>
+      <div class="head">
+        <div><h2 id="detailTitle">样本详情</h2><div class="status" id="detailSubtitle">选择左侧样本查看详情</div></div>
+        <div class="tabs"><button class="active" data-tab="dataset">数据</button><button data-tab="run">运行</button><button data-tab="results">结果</button></div>
+      </div>
+      <div class="toolbar">
+        <button id="selectAll">选择全部 QA</button><button id="clearSelection">清空选择</button><button class="primary" id="startRun">发起评测</button>
+        <label style="width:150px;">用户 ID<input id="userId" value="locomo-user" /></label>
+        <label style="width:160px;">Agent ID<input id="agentId" value="locomo-agent" /></label>
+      </div>
+      <div class="body">
+        <div class="tab-pane" id="tab-dataset">
+          <div class="grid">
+            <div class="metric"><span class="muted">Sessions</span><strong id="mSessions">-</strong></div>
+            <div class="metric"><span class="muted">Turns</span><strong id="mTurns">-</strong></div>
+            <div class="metric"><span class="muted">QA</span><strong id="mQa">-</strong></div>
+            <div class="metric"><span class="muted">Selected</span><strong id="mSelected">0</strong></div>
+          </div>
+          <h3>QA</h3><div class="stack scroll" id="qaList"></div>
+          <h3>对话预览</h3><div class="scroll" id="turns"></div>
+        </div>
+        <div class="tab-pane hidden" id="tab-run"><div class="stack" id="currentRun"></div><h3>事件</h3><div class="stack scroll" id="events"></div></div>
+        <div class="tab-pane hidden" id="tab-results"><div class="stack scroll" id="results"></div></div>
+      </div>
+    </section>
+    <section>
+      <div class="head"><h2>运行与历史</h2><button id="refreshRuns">刷新</button></div>
+      <div class="body scroll">
+        <div class="stack">
+          <div class="run">
+            <div class="row"><span>实时进度</span><span class="tag warn" id="sideStatus">idle</span></div>
+            <div id="sideProgress" class="muted">选择 QA 后发起评测。</div>
+          </div>
+          <div>
+            <h3>回放对话</h3>
+            <div class="scroll" id="liveReplay"></div>
+          </div>
+          <div>
+            <h3>逐题结果</h3>
+            <div class="stack" id="liveScores"></div>
+          </div>
+          <div>
+            <h3>事件流</h3>
+            <div class="stack" id="sideEvents"></div>
+          </div>
+          <div>
+            <h3>历史评测</h3>
+            <div class="stack" id="runs"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let dataset = {samples: []}, activeSample = null, selectedQa = new Set(), activeRunId = null, pollTimer = null;
+    function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char])); }
+    async function api(path, options = {}) {
+      const response = await fetch(path, {headers: {"Content-Type": "application/json"}, ...options});
+      const data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.message || data.error || response.statusText);
+      return data;
+    }
+    async function loadDataset() {
+      dataset = await api("/agent/locomo/dataset");
+      const manifest = dataset.manifest || {};
+      $("datasetStatus").textContent = `${manifest.exists ? "本地数据集已就绪" : "数据集未下载"} · ${manifest.path || ""}`;
+      $("sampleCount").textContent = `${dataset.samples.length} samples`;
+      renderSamples();
+    }
+    function renderSamples() {
+      const q = $("sampleSearch").value.trim().toLowerCase();
+      const items = dataset.samples.filter((item) => !q || JSON.stringify(item).toLowerCase().includes(q));
+      $("samples").innerHTML = items.map((item) => `
+        <div class="sample ${activeSample?.sample_id === item.sample_id ? "active" : ""}" data-sample="${escapeHtml(item.sample_id)}">
+          <div class="row"><span>${escapeHtml(item.sample_id)}</span><span class="tag">${item.qa_count} QA</span></div>
+          <div class="muted">${escapeHtml(item.speaker_a || "-")} / ${escapeHtml(item.speaker_b || "-")} · ${item.session_count} sessions · ${item.turn_count} turns</div>
+        </div>`).join("");
+      [...document.querySelectorAll(".sample")].forEach((node) => node.onclick = () => loadSample(node.dataset.sample));
+    }
+    async function loadSample(sampleId) {
+      activeSample = await api(`/agent/locomo/dataset/${encodeURIComponent(sampleId)}`);
+      selectedQa = new Set();
+      $("detailTitle").textContent = `${activeSample.sample_id} 详情`;
+      $("detailSubtitle").textContent = `${activeSample.speaker_a || "-"} / ${activeSample.speaker_b || "-"}`;
+      renderSamples(); renderSample();
+    }
+    function renderSample() {
+      const sessions = activeSample?.sessions || [], qa = activeSample?.qa || [];
+      $("mSessions").textContent = sessions.length;
+      $("mTurns").textContent = sessions.reduce((sum, item) => sum + item.turn_count, 0);
+      $("mQa").textContent = qa.length; $("mSelected").textContent = selectedQa.size;
+      $("qaList").innerHTML = qa.map((item) => `
+        <div class="qa ${selectedQa.has(item.id) ? "active" : ""}" data-qa="${escapeHtml(item.id)}">
+          <div class="row"><span>#${item.index} ${escapeHtml(item.category)}</span><span class="tag">${escapeHtml(item.id)}</span></div>
+          <div>${escapeHtml(item.question)}</div><div class="muted">Answer: ${escapeHtml(item.answer)}</div>
+          <div class="muted">Evidence: ${escapeHtml((item.evidence || []).join(", "))}</div>
+        </div>`).join("");
+      [...document.querySelectorAll(".qa")].forEach((node) => node.onclick = () => { selectedQa.has(node.dataset.qa) ? selectedQa.delete(node.dataset.qa) : selectedQa.add(node.dataset.qa); renderSample(); });
+      const turns = sessions.slice(0, 2).flatMap((session) => (session.turns || []).slice(0, 10).map((turn, index) => ({...turn, session: session.id, index})));
+      $("turns").innerHTML = turns.map((turn) => `<div class="turn ${turn.index % 2 ? "alt" : ""}"><b>${escapeHtml(turn.speaker)} · ${escapeHtml(turn.session)} · ${escapeHtml(turn.dia_id || "")}</b><br>${escapeHtml(turn.text || "")}</div>`).join("") || "<div class='muted'>暂无对话</div>";
+    }
+    function setTab(tab) {
+      [...document.querySelectorAll(".tabs button")].forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
+      [...document.querySelectorAll(".tab-pane")].forEach((pane) => pane.classList.add("hidden"));
+      $(`tab-${tab}`).classList.remove("hidden");
+    }
+    async function startRun() {
+      if (!activeSample) return;
+      const qaIds = selectedQa.size ? [...selectedQa] : activeSample.qa.map((item) => item.id);
+      $("startRun").disabled = true;
+      try {
+        const run = await api("/agent/locomo/runs", {method: "POST", body: JSON.stringify({sample_ids: [activeSample.sample_id], qa_ids: {[activeSample.sample_id]: qaIds}, user_id: $("userId").value.trim(), agent_id: $("agentId").value.trim()})});
+        activeRunId = run.run_id; setTab("run"); pollRun();
+      } finally { $("startRun").disabled = false; }
+    }
+    async function pollRun() {
+      if (!activeRunId) return;
+      const [run, events] = await Promise.all([api(`/agent/locomo/runs/${encodeURIComponent(activeRunId)}`), api(`/agent/locomo/runs/${encodeURIComponent(activeRunId)}/events`)]);
+      renderRun(run, events.events || []); await loadRuns();
+      if (["queued", "running"].includes(run.status)) { clearTimeout(pollTimer); pollTimer = setTimeout(pollRun, 1200); }
+    }
+    function renderRun(run, events) {
+      const summary = run.summary || {}, progress = run.progress || {};
+      $("currentRun").innerHTML = `<div class="run"><div class="row"><span>${escapeHtml(run.run_id)}</span><span class="tag ${run.status === "completed" ? "good" : run.status === "failed" ? "bad" : "warn"}">${escapeHtml(run.status)}</span></div><div class="muted">完成 ${progress.completed || 0} / ${progress.total || 0} · F1 ${summary.token_f1 ?? "-"} · contains ${summary.contains ?? "-"}</div>${run.error ? `<div class="error">${escapeHtml(run.error)}</div>` : ""}</div>`;
+      $("events").innerHTML = events.slice(-80).reverse().map((event) => `<div class="event"><pre>${escapeHtml(JSON.stringify(event, null, 2))}</pre></div>`).join("");
+      $("results").innerHTML = (run.results || []).map((item) => `<div class="run"><div class="row"><span>${escapeHtml(item.sample_id)} · ${escapeHtml(item.qa_id)}</span><span class="tag good">F1 ${item.scores?.token_f1 ?? 0}</span></div><div><b>Q:</b> ${escapeHtml(item.question)}</div><div><b>Gold:</b> ${escapeHtml(item.gold_answer)}</div><div class="answer turn"><b>Agent:</b><br>${escapeHtml(item.agent_answer)}</div>${item.error ? `<div class="error">${escapeHtml(item.error)}</div>` : ""}</div>`).join("") || "<div class='muted'>暂无结果</div>";
+      $("sideStatus").textContent = run.status || "idle";
+      $("sideStatus").className = `tag ${run.status === "completed" ? "good" : run.status === "failed" ? "bad" : "warn"}`;
+      $("sideProgress").innerHTML = `run: ${escapeHtml(run.run_id)}<br>完成 ${progress.completed || 0} / ${progress.total || 0}<br>token_f1 ${summary.token_f1 ?? "-"} · contains ${summary.contains ?? "-"} · errors ${summary.errors ?? 0}`;
+      const replay = events.filter((event) => event.type === "turn_replayed").slice(-80);
+      $("liveReplay").innerHTML = replay.map((event, index) => `<div class="turn ${index % 2 ? "alt" : ""}"><b>${escapeHtml(event.speaker)} · ${escapeHtml(event.session)} · ${escapeHtml(event.dia_id || "")}</b><br>${escapeHtml(event.text || "")}</div>`).join("") || "<div class='muted'>等待回放对话...</div>";
+      $("liveScores").innerHTML = (run.results || []).map((item) => `<div class="run"><div class="row"><span>${escapeHtml(item.qa_id)}</span><span class="tag ${item.error ? "bad" : "good"}">F1 ${item.scores?.token_f1 ?? 0}</span></div><div class="muted">${escapeHtml(item.category)} · contains ${item.scores?.contains ?? 0}</div><div>${escapeHtml(item.question)}</div></div>`).join("") || "<div class='muted'>等待评分...</div>";
+      $("sideEvents").innerHTML = events.slice(-12).reverse().map((event) => `<div class="event"><div class="row"><span>${escapeHtml(event.type)}</span><span class="muted">${escapeHtml(event.ts || "")}</span></div></div>`).join("") || "<div class='muted'>暂无事件</div>";
+    }
+    async function loadRuns() {
+      const data = await api("/agent/locomo/runs");
+      $("runs").innerHTML = (data.runs || []).map((run) => `<div class="run" data-run="${escapeHtml(run.run_id)}"><div class="row"><span>${escapeHtml(run.run_id)}</span><span class="tag ${run.status === "completed" ? "good" : run.status === "failed" ? "bad" : "warn"}">${escapeHtml(run.status)}</span></div><div class="muted">F1 ${run.summary?.token_f1 ?? "-"} · ${run.progress?.completed ?? 0}/${run.progress?.total ?? 0} · ${escapeHtml(run.created_at || "")}</div></div>`).join("") || "<div class='muted'>暂无历史评测</div>";
+      [...document.querySelectorAll(".run[data-run]")].forEach((node) => node.onclick = () => { activeRunId = node.dataset.run; setTab("run"); pollRun(); });
+    }
+    $("sync").onclick = async () => { await api("/agent/locomo/dataset/sync", {method:"POST", body:JSON.stringify({force:true})}); await loadDataset(); };
+    $("sampleSearch").oninput = renderSamples;
+    $("selectAll").onclick = () => { if (activeSample) { selectedQa = new Set(activeSample.qa.map((item) => item.id)); renderSample(); } };
+    $("clearSelection").onclick = () => { selectedQa = new Set(); renderSample(); };
+    $("startRun").onclick = startRun; $("refreshRuns").onclick = loadRuns;
+    [...document.querySelectorAll(".tabs button")].forEach((button) => button.onclick = () => setTab(button.dataset.tab));
+    loadDataset().catch((error) => $("datasetStatus").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`);
+    loadRuns().catch(() => {});
   </script>
 </body>
 </html>"""
@@ -1699,8 +1983,23 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         if path == "/":
             self._send_html(INDEX_HTML)
             return
+        if path == "/agent/locomo":
+            self._send_html(LOCOMO_HTML)
+            return
         if path == "/agent/config":
             self._send_json(HTTPStatus.OK, self.server.config.public_dict())
+            return
+        if path == "/agent/locomo/dataset":
+            self._locomo_dataset()
+            return
+        if path.startswith("/agent/locomo/dataset/"):
+            self._locomo_sample(unquote(path.rsplit("/", 1)[1]))
+            return
+        if path == "/agent/locomo/runs":
+            self._locomo_runs()
+            return
+        if path.startswith("/agent/locomo/runs/"):
+            self._locomo_run_get(path)
             return
         if path.startswith("/agent/inspect/") or path.startswith("/api/"):
             self._proxy()
@@ -1709,11 +2008,26 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if path == "/agent/context":
+            self._agent_context()
+            return
         if path == "/agent/chat":
             self._agent_chat()
             return
         if path == "/agent/session/commit":
             self._agent_commit()
+            return
+        if path == "/agent/accounts/ensure":
+            self._agent_account_ensure()
+            return
+        if path == "/agent/locomo/dataset/sync":
+            self._locomo_dataset_sync()
+            return
+        if path == "/agent/locomo/imports":
+            self._locomo_import_create()
+            return
+        if path == "/agent/locomo/runs":
+            self._locomo_run_create()
             return
         if path.startswith("/api/"):
             self._proxy()
@@ -1760,6 +2074,16 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         except ModelClientError as exc:
             self._send_json(HTTPStatus.BAD_GATEWAY, {"error": "model_error", "message": str(exc)})
 
+    def _agent_context(self) -> None:
+        try:
+            payload = self._read_json()
+            data = AgentChatService(self._request_config()).preview_context(payload)
+            self._send_json(HTTPStatus.OK, data)
+        except ValueError as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "bad_request", "message": str(exc)})
+        except EchoMemoryClientError as exc:
+            self._send_json(HTTPStatus.BAD_GATEWAY, {"error": "echomemory_error", "message": str(exc)})
+
     def _agent_commit(self) -> None:
         try:
             payload = self._read_json()
@@ -1772,6 +2096,55 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "bad_request", "message": str(exc)})
         except EchoMemoryClientError as exc:
             self._send_json(HTTPStatus.BAD_GATEWAY, {"error": "echomemory_error", "message": str(exc)})
+
+    def _locomo_dataset_sync(self) -> None:
+        try:
+            payload = self._read_json()
+            data = LocomoDatasetService(self._request_config().locomo).ensure_dataset(force=bool(payload.get("force")))
+            self._send_json(HTTPStatus.OK, data)
+        except LocomoDatasetError as exc:
+            self._send_json(HTTPStatus.BAD_GATEWAY, {"error": "locomo_dataset_error", "message": str(exc)})
+
+    def _locomo_dataset(self) -> None:
+        try:
+            data = LocomoDatasetService(self._request_config().locomo).index()
+            self._send_json(HTTPStatus.OK, data)
+        except LocomoDatasetError as exc:
+            self._send_json(HTTPStatus.BAD_GATEWAY, {"error": "locomo_dataset_error", "message": str(exc)})
+
+    def _locomo_sample(self, sample_id: str) -> None:
+        try:
+            data = LocomoDatasetService(self._request_config().locomo).sample(sample_id)
+            self._send_json(HTTPStatus.OK, data)
+        except LocomoDatasetError as exc:
+            self._send_json(HTTPStatus.NOT_FOUND, {"error": "locomo_dataset_error", "message": str(exc)})
+
+    def _locomo_run_create(self) -> None:
+        try:
+            data = LocomoEvalService(self._request_config()).create_run(self._read_json())
+            self._send_json(HTTPStatus.OK, data)
+        except (LocomoDatasetError, LocomoEvalError, ValueError) as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "locomo_eval_error", "message": str(exc)})
+
+    def _locomo_runs(self) -> None:
+        try:
+            self._send_json(HTTPStatus.OK, LocomoEvalService(self._request_config()).list_runs())
+        except LocomoEvalError as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "locomo_eval_error", "message": str(exc)})
+
+    def _locomo_run_get(self, path: str) -> None:
+        try:
+            parts = [part for part in path.split("/") if part]
+            if len(parts) == 5 and parts[-1] == "events":
+                data = LocomoEvalService(self._request_config()).get_events(parts[-2])
+            elif len(parts) == 4:
+                data = LocomoEvalService(self._request_config()).get_run(parts[-1])
+            else:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+                return
+            self._send_json(HTTPStatus.OK, data)
+        except LocomoEvalError as exc:
+            self._send_json(HTTPStatus.NOT_FOUND, {"error": "locomo_eval_error", "message": str(exc)})
 
     def _request_config(self) -> AgentConfig:
         auth_key = self.headers.get("X-Auth-Key", "").strip()

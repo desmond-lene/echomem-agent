@@ -38,7 +38,7 @@ class EchoMemoryClient:
             message = str(exc)
             if "echomemory_http_404" in message or "No such file or directory" in message:
                 return {"messages": []}
-            raise
+            return {"messages": [], "error": message, "degraded": True}
         messages: list[dict[str, Any]] = []
         for line in str(payload.get("text") or "").splitlines():
             if not line.strip():
@@ -75,6 +75,9 @@ class EchoMemoryClient:
     def commit(self, session_id: str) -> dict[str, Any]:
         return self.post(f"/api/sessions/{session_id}/commit", {})
 
+    def get_commit_status(self, session_id: str, commit_id: str) -> dict[str, Any]:
+        return self.get(f"/api/sessions/{session_id}/commits/{commit_id}")
+
     def get_commit_memories(self, session_id: str, commit_id: str) -> dict[str, Any]:
         return self.get(f"/api/sessions/{session_id}/commits/{commit_id}/memories")
 
@@ -89,6 +92,10 @@ class EchoMemoryClient:
             raise EchoMemoryClientError(f"echomemory_http_{exc.code}: {detail}") from exc
         except URLError as exc:
             raise EchoMemoryClientError(f"echomemory_unreachable: {exc.reason}") from exc
+        except TimeoutError as exc:
+            raise EchoMemoryClientError(f"echomemory_timeout: {exc}") from exc
+        except OSError as exc:
+            raise EchoMemoryClientError(f"echomemory_io_error: {exc}") from exc
 
     def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -107,6 +114,10 @@ class EchoMemoryClient:
             raise EchoMemoryClientError(f"echomemory_http_{exc.code}: {detail}") from exc
         except URLError as exc:
             raise EchoMemoryClientError(f"echomemory_unreachable: {exc.reason}") from exc
+        except TimeoutError as exc:
+            raise EchoMemoryClientError(f"echomemory_timeout: {exc}") from exc
+        except OSError as exc:
+            raise EchoMemoryClientError(f"echomemory_io_error: {exc}") from exc
 
     def _headers(self, base: dict[str, str] | None = None) -> dict[str, str]:
         headers = dict(base or {})

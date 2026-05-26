@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoCoMo 评测台设计</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #66758b;
+      --paper: #fbfcff;
+      --panel: #ffffff;
+      --line: #d9e2ef;
+      --blue: #2459c9;
+      --blue-soft: #edf4ff;
+      --green: #16734d;
+      --green-soft: #edf8f1;
+      --orange: #a65a16;
+      --orange-soft: #fff4e4;
+      --red: #a23a3a;
+      --red-soft: #fff0f0;
+      --gray-soft: #f3f6fb;
+      --shadow: 0 10px 28px rgba(24, 42, 80, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #f4f7fb;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.62;
+      letter-spacing: 0;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: var(--gray-soft);
+      color: #28364f;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 0;
+      padding: 14px;
+      border-radius: 8px;
+      background: #111827;
+      color: #e5e7eb;
+      line-height: 1.55;
+    }
+    pre code { padding: 0; background: transparent; color: inherit; }
+    .page { width: min(1380px, calc(100% - 36px)); margin: 0 auto 56px; }
+    header { padding: 38px 0 22px; text-align: center; }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      width: min(980px, 100%);
+      margin: 18px auto 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+    .nav a {
+      padding: 7px 10px;
+      border-radius: 6px;
+      color: #32415a;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .nav a:hover { background: var(--blue-soft); text-decoration: none; }
+    .section {
+      margin-top: 18px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    h2 { margin: 0 0 12px; font-size: 28px; line-height: 1.2; }
+    h3 { margin: 22px 0 8px; font-size: 20px; line-height: 1.25; }
+    h4 { margin: 16px 0 8px; font-size: 16px; }
+    p { margin: 8px 0; }
+    ul { margin: 8px 0 0; padding-left: 20px; }
+    li { margin: 6px 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .card {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .card h3, .card h4 { margin-top: 0; }
+    .tag {
+      display: inline-flex;
+      margin: 2px 4px 2px 0;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--gray-soft);
+      color: #41516b;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .tag.good { background: var(--green-soft); color: var(--green); }
+    .tag.warn { background: var(--orange-soft); color: var(--orange); }
+    .tag.info { background: var(--blue-soft); color: var(--blue); }
+    .tag.bad { background: var(--red-soft); color: var(--red); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th { background: #f7f9fd; color: #34435c; }
+    tr:last-child td { border-bottom: 0; }
+
+    .prototype {
+      border: 1px solid #cfd9e8;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #eef2f7;
+    }
+    .app-shell {
+      display: grid;
+      grid-template-columns: 280px minmax(460px, 1fr) 430px;
+      min-height: 760px;
+      color: #182235;
+    }
+    .app-sidebar, .app-main, .app-side {
+      min-width: 0;
+      border-right: 1px solid #d8e1ee;
+      background: #fff;
+    }
+    .app-side { border-right: 0; background: #fbfcff; }
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #d8e1ee;
+      background: #fff;
+    }
+    .app-title { font-size: 18px; font-weight: 800; }
+    .app-subtitle { color: #66758b; font-size: 12px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #d8e1ee;
+      background: #f7f9fd;
+    }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      padding: 6px 10px;
+      border: 1px solid #cbd6e5;
+      border-radius: 6px;
+      background: #fff;
+      color: #24344f;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .button.primary { border-color: #2459c9; background: #2459c9; color: #fff; }
+    .button.good { border-color: #16734d; background: #16734d; color: #fff; }
+    .segmented {
+      display: inline-flex;
+      border: 1px solid #cbd6e5;
+      border-radius: 7px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .segmented span {
+      padding: 6px 9px;
+      border-right: 1px solid #cbd6e5;
+      color: #526176;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .segmented span:last-child { border-right: 0; }
+    .segmented .active { background: #2459c9; color: #fff; }
+    .sidebar-block { padding: 14px 14px 0; }
+    .filter-box {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid #d8e1ee;
+      border-radius: 8px;
+      background: #fbfcff;
+    }
+    .input {
+      min-height: 32px;
+      padding: 6px 9px;
+      border: 1px solid #cbd6e5;
+      border-radius: 6px;
+      background: #fff;
+      color: #4b5b73;
+      font-size: 13px;
+    }
+    .sample-list {
+      display: grid;
+      gap: 8px;
+      padding: 14px;
+    }
+    .sample-item {
+      padding: 10px;
+      border: 1px solid #d8e1ee;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .sample-item.active { border-color: #2459c9; background: #edf4ff; }
+    .sample-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .sample-name { font-weight: 800; }
+    .small { color: #66758b; font-size: 12px; }
+    .main-grid {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 100%;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      padding: 14px 16px;
+    }
+    .metric {
+      padding: 10px;
+      border: 1px solid #d8e1ee;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .metric strong { display: block; font-size: 22px; line-height: 1.1; }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 12px;
+      padding: 0 16px 16px;
+      min-height: 0;
+    }
+    .panel {
+      min-width: 0;
+      border: 1px solid #d8e1ee;
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #d8e1ee;
+      background: #f7f9fd;
+      font-weight: 800;
+    }
+    .conversation {
+      display: grid;
+      gap: 10px;
+      max-height: 390px;
+      overflow: auto;
+      padding: 12px;
+      background: #fbfcff;
+    }
+    .turn {
+      max-width: 86%;
+      padding: 9px 10px;
+      border: 1px solid #d8e1ee;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .turn.b { justify-self: end; border-color: #c7d8ff; background: #edf4ff; }
+    .turn.agent { border-color: #cce9d9; background: #edf8f1; }
+    .qa-list {
+      display: grid;
+      gap: 8px;
+      max-height: 390px;
+      overflow: auto;
+      padding: 10px;
+    }
+    .qa-item {
+      padding: 9px;
+      border: 1px solid #d8e1ee;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 13px;
+    }
+    .qa-item.active { border-color: #2459c9; background: #edf4ff; }
+    .side-stack {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+    }
+    .run-card {
+      padding: 12px;
+      border: 1px solid #d8e1ee;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .progress {
+      height: 8px;
+      margin: 10px 0;
+      border-radius: 999px;
+      background: #e6ecf5;
+      overflow: hidden;
+    }
+    .progress span { display: block; width: 58%; height: 100%; background: #2459c9; }
+    .log {
+      display: grid;
+      gap: 8px;
+      max-height: 250px;
+      overflow: auto;
+      padding: 10px;
+      border: 1px solid #d8e1ee;
+      border-radius: 8px;
+      background: #101827;
+      color: #d9e6ff;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .result-row {
+      display: grid;
+      grid-template-columns: 54px 1fr 64px;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #edf1f7;
+      font-size: 13px;
+    }
+    .result-row:last-child { border-bottom: 0; }
+    .score {
+      justify-self: end;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #edf8f1;
+      color: #16734d;
+      font-weight: 800;
+    }
+    .score.mid { background: #fff4e4; color: #a65a16; }
+    .history-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid #edf1f7;
+      font-size: 13px;
+    }
+    .history-row:last-child { border-bottom: 0; }
+
+    @media (max-width: 1120px) {
+      .grid { grid-template-columns: 1fr; }
+      .app-shell { grid-template-columns: 1fr; }
+      .app-sidebar, .app-main { border-right: 0; border-bottom: 1px solid #d8e1ee; }
+      .workspace { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <p class="eyebrow">EchoMem Agent Design</p>
+      <h1>LoCoMo 评测台设计</h1>
+      <p class="subtitle">
+        在 echomem-agent 内增加 LoCoMo 数据集自动下载、样本详情查看、批量评测运行、实时对话与结果观察、历史评测回放能力。
+      </p>
+      <div class="meta-row">
+        <span class="pill">设计文件：docs/design/agent/locomo-eval-design.html</span>
+        <span class="pill">数据源：snap-research/locomo data/locomo10.json</span>
+        <span class="pill">阶段：先设计，后实现</span>
+      </div>
+    </header>
+
+    <nav class="nav">
+      <a href="#goal">目标</a>
+      <a href="#dataset">数据集</a>
+      <a href="#prototype">效果页面</a>
+      <a href="#flow">评测流程</a>
+      <a href="#api">接口</a>
+      <a href="#storage">存储</a>
+      <a href="#implementation">实现计划</a>
+    </nav>
+
+    <section class="section" id="goal">
+      <h2>目标与边界</h2>
+      <p>
+        LoCoMo 评测台是现有 Agent Playground 的一个新页面，面向记忆能力调试。它不是替代聊天页，而是把固定基准数据转成可重复运行的任务：把长对话写入 EchoMemory，按 LoCoMo QA 标注提问，再把 Agent 回答与标准答案进行评分和归档。
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3>必须支持</h3>
+          <ul>
+            <li>首次进入页面或点击刷新时自动下载 LoCoMo 数据集到本地缓存。</li>
+            <li>查看 sample、session、turn、QA、evidence、summary 等详情。</li>
+            <li>选择一个或多个 sample / QA 发起评测。</li>
+            <li>运行中实时显示回放对话、提问、Agent 回答、评分状态。</li>
+            <li>按历史 run 查看总体分数、逐题结果、日志和复现实参。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>建议支持</h3>
+          <ul>
+            <li>支持 dry-run，只查看将写入 EchoMemory 的会话内容。</li>
+            <li>支持继续失败 run，从未完成的 QA 开始恢复。</li>
+            <li>支持导出 JSON / CSV，用于横向比较模型和 EchoMemory 配置。</li>
+            <li>支持切换评分器：字符串包含、token F1、LLM judge。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>暂不支持</h3>
+          <ul>
+            <li>不下载 LoCoMo 图片，仅展示数据集中已有的图片 URL、caption 和查询词。</li>
+            <li>不在第一版实现多模型并行竞赛。</li>
+            <li>不修改 EchoMemory 内部存储结构，只通过 HTTP API 写入和检索。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="dataset">
+      <h2>LoCoMo 数据集接入</h2>
+      <p>
+        官方仓库说明 LoCoMo 是 ACL 2024 论文 "Evaluating Very Long-Term Conversational Memory of LLM Agents" 的数据和代码仓库。数据文件位于
+        <code>data/locomo10.json</code>，包含 10 个长对话样本，每个样本带有 conversation、observation、session_summary、event_summary 和 QA 标注。
+      </p>
+
+      <h3>下载策略</h3>
+      <table>
+        <thead>
+          <tr><th>项目</th><th>设计</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>默认 URL</td>
+            <td><code>https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json</code></td>
+            <td>可通过配置覆盖，便于内网镜像或固定 commit。</td>
+          </tr>
+          <tr>
+            <td>本地路径</td>
+            <td><code>data/locomo/locomo10.json</code></td>
+            <td>首次缺失时自动下载；保留 <code>data/locomo/manifest.json</code> 记录来源、sha256、下载时间。</td>
+          </tr>
+          <tr>
+            <td>刷新</td>
+            <td>页面按钮触发 <code>force=true</code></td>
+            <td>刷新前将旧文件移动到 <code>data/locomo/archive/</code>，避免误删。</td>
+          </tr>
+          <tr>
+            <td>校验</td>
+            <td>JSON parse + schema probe + sha256</td>
+            <td>只做轻量结构检查：顶层 list、sample_id、conversation、qa 存在。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>字段映射</h3>
+      <pre><code>LocomoSample
+  sample_id: "sample_1"
+  speakers: conversation.speaker_a / conversation.speaker_b
+  sessions:
+    - id: "session_1"
+      date_time: conversation.session_1_date_time
+      turns: [{speaker, dia_id, text, img_url?, blip_caption?, img_query?}]
+      observation: observation.session_1_observation
+      summary: session_summary.session_1_summary
+      events: event_summary.events_session_1
+  qa:
+    - question
+      answer
+      category
+      evidence: ["D3:12", "D7:4"]</code></pre>
+    </section>
+
+    <section class="section" id="prototype">
+      <h2>效果页面</h2>
+      <p>
+        新页面建议挂在 <code>/agent/locomo</code>，顶部可从当前 Agent Playground 增加一个“LoCoMo 评测”入口。页面优先服务重复调试，所以采用三栏工作台：左侧筛选和样本选择，中间查看数据与实时对话，右侧运行状态、评分和历史。
+      </p>
+
+      <div class="prototype">
+        <div class="app-shell">
+          <aside class="app-sidebar">
+            <div class="app-header">
+              <div>
+                <div class="app-title">LoCoMo</div>
+                <div class="app-subtitle">10 samples · 35 sessions max</div>
+              </div>
+              <span class="tag good">ready</span>
+            </div>
+            <div class="sidebar-block">
+              <div class="filter-box">
+                <div class="input">搜索 sample、speaker、question</div>
+                <div class="segmented">
+                  <span class="active">全部</span>
+                  <span>QA</span>
+                  <span>事件</span>
+                </div>
+                <div>
+                  <span class="tag info">single-hop</span>
+                  <span class="tag info">multi-hop</span>
+                  <span class="tag warn">temporal</span>
+                  <span class="tag">open-domain</span>
+                </div>
+              </div>
+            </div>
+            <div class="sample-list">
+              <div class="sample-item active">
+                <div class="sample-row">
+                  <span class="sample-name">sample_1</span>
+                  <span class="tag good">12/18</span>
+                </div>
+                <div class="small">Caroline / Melanie · 31 sessions · 18 QA</div>
+              </div>
+              <div class="sample-item">
+                <div class="sample-row">
+                  <span class="sample-name">sample_2</span>
+                  <span class="tag">0/21</span>
+                </div>
+                <div class="small">Darren / Isabella · 28 sessions · 21 QA</div>
+              </div>
+              <div class="sample-item">
+                <div class="sample-row">
+                  <span class="sample-name">sample_3</span>
+                  <span class="tag warn">running</span>
+                </div>
+                <div class="small">Maya / Vivian · 35 sessions · 20 QA</div>
+              </div>
+              <div class="sample-item">
+                <div class="sample-row">
+                  <span class="sample-name">sample_4</span>
+                  <span class="tag">0/17</span>
+                </div>
+                <div class="small">Long memory dialogue · evidence enabled</div>
+              </div>
+            </div>
+          </aside>
+
+          <main class="app-main">
+            <div class="app-header">
+              <div>
+                <div class="app-title">sample_1 详情与实时评测</div>
+                <div class="app-subtitle">数据来自 data/locomo/locomo10.json · sha256 已校验</div>
+              </div>
+              <div class="segmented">
+                <span class="active">数据</span>
+                <span>运行</span>
+                <span>结果</span>
+              </div>
+            </div>
+            <div class="toolbar">
+              <span class="button">选择全部 QA</span>
+              <span class="button">只选当前 session evidence</span>
+              <span class="button primary">发起评测</span>
+              <span class="button">Dry Run</span>
+              <span class="button">导出</span>
+            </div>
+            <div class="main-grid">
+              <div class="stats">
+                <div class="metric"><span class="small">Sessions</span><strong>31</strong></div>
+                <div class="metric"><span class="small">Turns</span><strong>302</strong></div>
+                <div class="metric"><span class="small">QA</span><strong>18</strong></div>
+                <div class="metric"><span class="small">Selected</span><strong>8</strong></div>
+              </div>
+              <div class="workspace">
+                <section class="panel">
+                  <div class="panel-head">
+                    <span>对话回放</span>
+                    <span class="tag info">session_12 · 2023-08-17</span>
+                  </div>
+                  <div class="conversation">
+                    <div class="turn"><b>Caroline · D12:1</b><br />I finally booked the weekend pottery workshop we talked about.</div>
+                    <div class="turn b"><b>Melanie · D12:2</b><br />That is perfect. It also lines up with your plan to make a handmade gift.</div>
+                    <div class="turn"><b>Caroline · D12:3</b><br />Exactly. I want the gift to be useful, not just decorative.</div>
+                    <div class="turn agent"><b>Agent 回答 · QA #07</b><br />She booked a weekend pottery workshop because she wanted to make a useful handmade gift.</div>
+                  </div>
+                </section>
+                <section class="panel">
+                  <div class="panel-head">
+                    <span>QA 队列</span>
+                    <span class="tag good">8 selected</span>
+                  </div>
+                  <div class="qa-list">
+                    <div class="qa-item active">
+                      <b>#07 multi-hop</b>
+                      <div>Why did Caroline book the pottery workshop?</div>
+                      <div class="small">Evidence: D8:6, D12:1, D12:3</div>
+                    </div>
+                    <div class="qa-item">
+                      <b>#08 temporal</b>
+                      <div>What changed after Melanie's trip?</div>
+                      <div class="small">Evidence: D5:2, D10:9</div>
+                    </div>
+                    <div class="qa-item">
+                      <b>#09 single-hop</b>
+                      <div>Which class did Caroline mention?</div>
+                      <div class="small">Evidence: D12:1</div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </main>
+
+          <aside class="app-side">
+            <div class="app-header">
+              <div>
+                <div class="app-title">运行与历史</div>
+                <div class="app-subtitle">当前 run: locomo_20260526_143022</div>
+              </div>
+              <span class="tag warn">running</span>
+            </div>
+            <div class="side-stack">
+              <div class="run-card">
+                <h4>实时进度</h4>
+                <div class="small">正在写入 session_18，完成后 commit 并开始 QA #07</div>
+                <div class="progress"><span></span></div>
+                <div class="result-row"><span>样本</span><span>sample_1</span><span class="score mid">58%</span></div>
+                <div class="result-row"><span>QA</span><span>7 / 12 completed</span><span class="score">0.71</span></div>
+                <div class="result-row"><span>F1</span><span>token overlap average</span><span class="score">0.64</span></div>
+              </div>
+              <div class="run-card">
+                <h4>事件流</h4>
+                <div class="log">
+                  <div>14:30:22 dataset loaded from local cache</div>
+                  <div>14:30:24 opened EchoMemory session locomo-sample_1-run</div>
+                  <div>14:30:28 wrote 302 turns across 31 sessions</div>
+                  <div>14:30:35 commit completed: archive_042</div>
+                  <div>14:30:42 QA #07 answered, judge pending</div>
+                </div>
+              </div>
+              <div class="run-card">
+                <h4>逐题结果</h4>
+                <div class="result-row"><span>#01</span><span>single-hop · correct</span><span class="score">1.00</span></div>
+                <div class="result-row"><span>#02</span><span>temporal · partial</span><span class="score mid">0.54</span></div>
+                <div class="result-row"><span>#03</span><span>multi-hop · correct</span><span class="score">0.91</span></div>
+              </div>
+              <div class="run-card">
+                <h4>历史评测</h4>
+                <div class="history-row"><span>qwen3-max · sample_1 · 18 QA<br /><span class="small">2026-05-26 13:12</span></span><span class="score">0.68</span></div>
+                <div class="history-row"><span>qwen3-max · sample_1-3 · 54 QA<br /><span class="small">2026-05-25 20:44</span></span><span class="score mid">0.51</span></div>
+                <div class="history-row"><span>baseline · sample_2 · failed<br /><span class="small">2026-05-25 18:05</span></span><span class="score mid">open</span></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="flow">
+      <h2>评测流程</h2>
+      <p>
+        第一版采用可解释的串行评测流程，保证每一步都能在页面上观察和重放。运行粒度建议为 run -> sample -> session replay -> commit -> QA answer -> judge。
+      </p>
+      <table>
+        <thead>
+          <tr><th>阶段</th><th>动作</th><th>实时展示</th><th>失败处理</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>准备数据</td>
+            <td>确认本地 <code>locomo10.json</code> 可用；缺失则下载。</td>
+            <td>下载进度、文件大小、sha256、样本数量。</td>
+            <td>保留错误消息；允许用户改 URL 后重试。</td>
+          </tr>
+          <tr>
+            <td>创建 run</td>
+            <td>写入 run 配置：样本、QA 范围、模型、EchoMemory base_url、评分器。</td>
+            <td>run id、开始时间、配置摘要。</td>
+            <td>run 状态为 failed，不产生部分评分。</td>
+          </tr>
+          <tr>
+            <td>回放对话</td>
+            <td>按 LoCoMo session 顺序将 turn 写入 EchoMemory session。</td>
+            <td>当前 session、turn、speaker、dia_id。</td>
+            <td>记录最后成功 turn；支持 resume。</td>
+          </tr>
+          <tr>
+            <td>归档记忆</td>
+            <td>每个 sample 回放完成后触发 EchoMemory commit。</td>
+            <td>commit id、状态、抽取记忆摘要。</td>
+            <td>commit 失败时仍可选择直接 QA，但结果标记为 degraded。</td>
+          </tr>
+          <tr>
+            <td>执行 QA</td>
+            <td>逐题调用 Agent chat，问题作为当前请求发送。</td>
+            <td>模型上下文、检索项、Agent 答案。</td>
+            <td>单题失败可跳过并继续下一题。</td>
+          </tr>
+          <tr>
+            <td>评分归档</td>
+            <td>按选定评分器生成 exact、F1、judge verdict 和解释。</td>
+            <td>逐题分数、总体均值、类别分布。</td>
+            <td>评分失败不丢答案，允许稍后重新评分。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>评分器</h3>
+      <ul>
+        <li><code>contains</code>：标准答案文本被回答包含时记为 1，否则 0。成本低，但对同义表达不友好。</li>
+        <li><code>token_f1</code>：参考常见 QA 评测，归一化后计算 token overlap。第一版默认启用。</li>
+        <li><code>llm_judge</code>：把 question、gold answer、agent answer、evidence 摘要交给模型判定 correct / partial / wrong。需要额外模型调用。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="api">
+      <h2>Agent Server 接口设计</h2>
+      <p>
+        页面只调用 echomem-agent 自己的接口。agent server 内部继续通过 EchoMemory HTTP API 写入 session、commit 和检索，保持当前工程“不 import echomem 内部模块”的边界。
+      </p>
+      <table>
+        <thead>
+          <tr><th>接口</th><th>用途</th><th>返回要点</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>GET /agent/locomo</code></td>
+            <td>LoCoMo 评测页面。</td>
+            <td>HTML。</td>
+          </tr>
+          <tr>
+            <td><code>POST /agent/locomo/dataset/sync</code></td>
+            <td>下载或刷新数据集。</td>
+            <td>manifest、sample_count、downloaded。</td>
+          </tr>
+          <tr>
+            <td><code>GET /agent/locomo/dataset</code></td>
+            <td>读取样本索引和统计信息。</td>
+            <td>samples、categories、manifest。</td>
+          </tr>
+          <tr>
+            <td><code>GET /agent/locomo/dataset/{sample_id}</code></td>
+            <td>读取单个 sample 详情。</td>
+            <td>conversation、qa、summaries、events。</td>
+          </tr>
+          <tr>
+            <td><code>POST /agent/locomo/runs</code></td>
+            <td>创建并启动评测。</td>
+            <td>run_id、status、selected_items。</td>
+          </tr>
+          <tr>
+            <td><code>GET /agent/locomo/runs/{run_id}</code></td>
+            <td>轮询 run 快照。</td>
+            <td>status、progress、results、latest_event。</td>
+          </tr>
+          <tr>
+            <td><code>GET /agent/locomo/runs/{run_id}/events</code></td>
+            <td>实时事件流，优先 SSE。</td>
+            <td>dataset、replay、commit、qa、judge、done 事件。</td>
+          </tr>
+          <tr>
+            <td><code>GET /agent/locomo/runs</code></td>
+            <td>历史评测列表。</td>
+            <td>run id、时间、配置、总体分数、状态。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>创建 run 请求示例</h3>
+      <pre><code>POST /agent/locomo/runs
+{
+  "sample_ids": ["sample_1", "sample_2"],
+  "qa_ids": {
+    "sample_1": ["qa_07", "qa_08"],
+    "sample_2": "all"
+  },
+  "mode": "replay_then_qa",
+  "scorers": ["token_f1", "llm_judge"],
+  "commit_policy": "after_each_sample",
+  "session_prefix": "locomo-eval",
+  "dry_run": false
+}</code></pre>
+    </section>
+
+    <section class="section" id="storage">
+      <h2>本地存储设计</h2>
+      <p>
+        LoCoMo 页面需要保存数据集缓存和历史结果。第一版可直接使用 JSON 文件，后续如果 run 数量变大再迁移到 SQLite。
+      </p>
+      <pre><code>data/
+  locomo/
+    locomo10.json
+    manifest.json
+    archive/
+      locomo10.20260526T141500.json
+    runs/
+      locomo_20260526_143022/
+        run.json
+        events.jsonl
+        results.json
+        contexts/
+          sample_1_qa_07.json
+        answers/
+          sample_1_qa_07.json</code></pre>
+      <table>
+        <thead>
+          <tr><th>文件</th><th>内容</th><th>用途</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>manifest.json</code></td><td>source_url、sha256、downloaded_at、sample_count。</td><td>页面顶部数据源状态。</td></tr>
+          <tr><td><code>run.json</code></td><td>run 配置、状态、开始结束时间、模型与 EchoMemory 配置摘要。</td><td>历史列表与复现。</td></tr>
+          <tr><td><code>events.jsonl</code></td><td>实时事件追加日志。</td><td>SSE 重连、失败定位。</td></tr>
+          <tr><td><code>results.json</code></td><td>总体和逐题评分。</td><td>结果页、导出。</td></tr>
+          <tr><td><code>contexts/*.json</code></td><td>每题发送给模型的上下文和 trace。</td><td>解释为什么答对或答错。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section" id="implementation">
+      <h2>实现计划</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>1. 数据集服务</h3>
+          <ul>
+            <li>新增 <code>locomo_dataset.py</code>：下载、校验、索引、读取 sample。</li>
+            <li>新增配置：<code>locomo.dataset_url</code>、<code>locomo.data_dir</code>、<code>locomo.auto_download</code>。</li>
+            <li>测试覆盖：首次下载、缓存命中、坏 JSON、结构缺失。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>2. 评测服务</h3>
+          <ul>
+            <li>新增 <code>locomo_eval_service.py</code>：run 生命周期、回放、commit、QA、评分。</li>
+            <li>复用 <code>AgentChatService</code> 的上下文构造和 chat 调用。</li>
+            <li>事件以 JSONL 落盘，同时推给 SSE。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>3. 页面实现</h3>
+          <ul>
+            <li>新增 <code>/agent/locomo</code> 页面，不影响现有聊天页。</li>
+            <li>支持样本详情、QA 多选、运行视图、历史结果。</li>
+            <li>先用轮询实现，SSE 作为增强路径。</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>验收标准</h3>
+      <ul>
+        <li>本地无数据集时，打开页面可自动下载并显示 10 个 sample。</li>
+        <li>选择一个 sample 的 1 个 QA 后可完成完整评测，并在页面看到回放、回答、分数和历史记录。</li>
+        <li>失败 run 可在历史中打开，保留错误、已完成结果和最后事件。</li>
+        <li>现有 <code>/agent/chat</code>、上下文检查器、EchoMemory 调试功能不回归。</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
