@@ -225,9 +225,15 @@
       color: #24344f;
       font-size: 13px;
       font-weight: 800;
+      cursor: pointer;
     }
+    button.button { font: inherit; }
     .button.primary { border-color: #2459c9; background: #2459c9; color: #fff; }
     .button.good { border-color: #16734d; background: #16734d; color: #fff; }
+    .actionbar { display: none; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .actionbar.active { display: flex; }
+    .prototype-pane { display: none; }
+    .prototype-pane.active { display: block; }
     .segmented {
       display: inline-flex;
       border: 1px solid #cbd6e5;
@@ -235,14 +241,21 @@
       overflow: hidden;
       background: #fff;
     }
-    .segmented span {
+    .segmented span,
+    .segmented button {
       padding: 6px 9px;
       border-right: 1px solid #cbd6e5;
+      border-top: 0;
+      border-bottom: 0;
+      border-left: 0;
+      background: #fff;
       color: #526176;
       font-size: 12px;
       font-weight: 800;
+      cursor: pointer;
     }
-    .segmented span:last-child { border-right: 0; }
+    .segmented span:last-child,
+    .segmented button:last-child { border-right: 0; }
     .segmented .active { background: #2459c9; color: #fff; }
     .sidebar-block { padding: 14px 14px 0; }
     .filter-box {
@@ -547,7 +560,7 @@
     <section class="section" id="prototype">
       <h2>效果页面</h2>
       <p>
-        新页面建议挂在 <code>/agent/locomo</code>，顶部可从当前 Agent Playground 增加一个“LoCoMo 评测”入口。页面优先服务重复调试，所以采用三栏工作台：左侧筛选和样本选择，中间查看数据与实时对话，右侧运行状态、评分和历史。
+        新页面建议挂在 <code>/agent/locomo</code>，顶部可从当前 Agent Playground 增加一个“LoCoMo 评测”入口。页面优先服务重复调试，所以采用三栏工作台：左侧筛选和样本选择，中间按“导入 / 评测 / 运行 / 结果”切换闭环子页面，右侧持续展示运行状态、评分和历史。
       </p>
 
       <div class="prototype">
@@ -563,11 +576,11 @@
             <div class="sidebar-block">
               <div class="filter-box">
                 <div class="input">搜索 sample、speaker、question</div>
-                <div class="segmented">
-                  <span class="active">全部</span>
-                  <span>QA</span>
-                  <span>事件</span>
-                </div>
+              <div class="segmented">
+                <button type="button" class="active" onclick="locomoPrototypeFilter(this)">全部</button>
+                <button type="button" onclick="locomoPrototypeFilter(this)">QA</button>
+                <button type="button" onclick="locomoPrototypeFilter(this)">事件</button>
+              </div>
                 <div>
                   <span class="tag info">single-hop</span>
                   <span class="tag info">multi-hop</span>
@@ -615,62 +628,86 @@
                 <div class="app-subtitle">数据来自 data/locomo/locomo10.json · sha256 已校验</div>
               </div>
               <div class="segmented">
-                <span class="active">数据</span>
-                <span>运行</span>
-                <span>结果</span>
+                <button type="button" class="active" data-prototype-tab="import" onclick="locomoPrototypeTab('import')">导入</button>
+                <button type="button" data-prototype-tab="evaluate" onclick="locomoPrototypeTab('evaluate')">评测</button>
+                <button type="button" data-prototype-tab="run" onclick="locomoPrototypeTab('run')">运行</button>
+                <button type="button" data-prototype-tab="results" onclick="locomoPrototypeTab('results')">结果</button>
               </div>
             </div>
             <div class="toolbar">
-              <span class="button">选择全部 QA</span>
-              <span class="button">只选当前 session evidence</span>
-              <span class="button primary">发起评测</span>
-              <span class="button">Dry Run</span>
-              <span class="button">导出</span>
+              <div class="actionbar active" data-prototype-actions="import">
+                <button type="button" class="button" onclick="locomoPrototypeMark('已选择全部未导入会话')">选择全部会话</button>
+                <button type="button" class="button" onclick="locomoPrototypeMark('已清空会话选择')">清空会话</button>
+                <button type="button" class="button primary" onclick="locomoPrototypeMark('导入任务已提交，已导入会话变为不可选')">导入所选会话</button>
+              </div>
+              <div class="actionbar" data-prototype-actions="evaluate">
+                <button type="button" class="button" onclick="locomoPrototypeMark('已选择全部 QA')">选择全部 QA</button>
+                <button type="button" class="button" onclick="locomoPrototypeMark('已清空 QA 选择')">清空 QA</button>
+                <button type="button" class="button primary" onclick="locomoPrototypeMark('评测 run 已创建，切换到运行页')">发起评测</button>
+              </div>
+              <div class="actionbar" data-prototype-actions="run">
+                <button type="button" class="button" onclick="locomoPrototypeMark('运行状态已刷新')">刷新当前运行</button>
+                <button type="button" class="button" onclick="locomoPrototypeTab('results')">查看结果</button>
+              </div>
+              <div class="actionbar" data-prototype-actions="results">
+                <button type="button" class="button" onclick="locomoPrototypeMark('结果已刷新')">刷新结果</button>
+                <button type="button" class="button" onclick="locomoPrototypeTab('evaluate')">返回评测</button>
+              </div>
             </div>
-            <div class="main-grid">
+            <div class="main-grid prototype-pane active" data-prototype-pane="import">
               <div class="stats">
                 <div class="metric"><span class="small">Sessions</span><strong>31</strong></div>
                 <div class="metric"><span class="small">Turns</span><strong>302</strong></div>
-                <div class="metric"><span class="small">QA</span><strong>18</strong></div>
-                <div class="metric"><span class="small">Selected</span><strong>8</strong></div>
+                <div class="metric"><span class="small">Imported</span><strong>12</strong></div>
+                <div class="metric"><span class="small">Selected Conv</span><strong>5</strong></div>
               </div>
               <div class="workspace">
                 <section class="panel">
                   <div class="panel-head">
-                    <span>对话回放</span>
-                    <span class="tag info">session_12 · 2023-08-17</span>
+                    <span>会话导入</span>
+                    <span class="tag info">已导入不可选</span>
                   </div>
-                  <div class="conversation">
-                    <div class="turn"><b>Caroline · D12:1</b><br />I finally booked the weekend pottery workshop we talked about.</div>
-                    <div class="turn b"><b>Melanie · D12:2</b><br />That is perfect. It also lines up with your plan to make a handmade gift.</div>
-                    <div class="turn"><b>Caroline · D12:3</b><br />Exactly. I want the gift to be useful, not just decorative.</div>
-                    <div class="turn agent"><b>Agent 回答 · QA #07</b><br />She booked a weekend pottery workshop because she wanted to make a useful handmade gift.</div>
+                  <div class="qa-list">
+                    <div class="qa-item active" onclick="this.classList.toggle('active')"><b>session_12</b><div class="small">5 turns · selected for import</div></div>
+                    <div class="qa-item" onclick="this.classList.toggle('active')"><b>session_13</b><div class="small">8 turns · not imported</div></div>
+                    <div class="qa-item" style="background:#f7f9fc;color:#66758b"><b>session_14</b><span class="tag good" style="float:right">已导入</span><div class="small">不可再次选择</div></div>
                   </div>
                 </section>
                 <section class="panel">
                   <div class="panel-head">
-                    <span>QA 队列</span>
-                    <span class="tag good">8 selected</span>
+                    <span>对话预览</span>
+                    <span class="tag info">session_12</span>
                   </div>
-                  <div class="qa-list">
-                    <div class="qa-item active">
-                      <b>#07 multi-hop</b>
-                      <div>Why did Caroline book the pottery workshop?</div>
-                      <div class="small">Evidence: D8:6, D12:1, D12:3</div>
-                    </div>
-                    <div class="qa-item">
-                      <b>#08 temporal</b>
-                      <div>What changed after Melanie's trip?</div>
-                      <div class="small">Evidence: D5:2, D10:9</div>
-                    </div>
-                    <div class="qa-item">
-                      <b>#09 single-hop</b>
-                      <div>Which class did Caroline mention?</div>
-                      <div class="small">Evidence: D12:1</div>
-                    </div>
+                  <div class="conversation">
+                    <div class="turn"><b>Caroline · D12:1</b><br />I finally booked the weekend pottery workshop we talked about.</div>
+                    <div class="turn b"><b>Melanie · D12:2</b><br />That is perfect. It also lines up with your plan to make a handmade gift.</div>
                   </div>
                 </section>
               </div>
+            </div>
+            <div class="main-grid prototype-pane" data-prototype-pane="evaluate">
+              <div class="stats">
+                <div class="metric"><span class="small">Imported</span><strong>12</strong></div>
+                <div class="metric"><span class="small">QA</span><strong>18</strong></div>
+                <div class="metric"><span class="small">Selected QA</span><strong>8</strong></div>
+                <div class="metric"><span class="small">Ready</span><strong>yes</strong></div>
+              </div>
+              <div class="workspace">
+                <section class="panel">
+                  <div class="panel-head"><span>QA 队列</span><span class="tag good">8 selected</span></div>
+                  <div class="qa-list">
+                    <div class="qa-item active" onclick="this.classList.toggle('active')"><b>#07 multi-hop</b><div>Why did Caroline book the pottery workshop?</div><div class="small">Evidence: D8:6, D12:1, D12:3</div></div>
+                    <div class="qa-item" onclick="this.classList.toggle('active')"><b>#08 temporal</b><div>What changed after Melanie's trip?</div><div class="small">Evidence: D5:2, D10:9</div></div>
+                    <div class="qa-item" onclick="this.classList.toggle('active')"><b>#09 single-hop</b><div>Which class did Caroline mention?</div><div class="small">Evidence: D12:1</div></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+            <div class="main-grid prototype-pane" data-prototype-pane="run">
+              <div class="workspace"><section class="panel"><div class="panel-head"><span>运行中</span><span class="tag warn">running</span></div><div class="conversation"><div class="turn agent"><b>Agent 回答 · QA #07</b><br />She booked a weekend pottery workshop because she wanted to make a useful handmade gift.</div></div></section></div>
+            </div>
+            <div class="main-grid prototype-pane" data-prototype-pane="results">
+              <div class="workspace"><section class="panel"><div class="panel-head"><span>结果</span><span class="tag good">completed</span></div><div class="qa-list"><div class="qa-item"><b>#07 multi-hop</b><div>F1 0.91 · contains 1.00</div></div><div class="qa-item"><b>#08 temporal</b><div>F1 0.54 · contains 0.00</div></div></div></section></div>
             </div>
           </main>
 
@@ -722,7 +759,7 @@
     <section class="section" id="flow">
       <h2>评测流程</h2>
       <p>
-        第一版采用可解释的串行评测流程，保证每一步都能在页面上观察和重放。运行粒度建议为 run -> sample -> session replay -> commit -> QA answer -> judge。
+        第一版采用可解释的两阶段流程：先把一个或多个 LoCoMo conv 导入 EchoMemory，并把成功导入的 conv 标为不可重复选择；再从已导入样本中选择一个或多个 QA 发起评测。运行粒度建议为 import -> sample/session replay -> commit -> run -> QA answer -> judge。
       </p>
       <table>
         <thead>
@@ -917,5 +954,28 @@
       </ul>
     </section>
   </div>
+  <script>
+    function locomoPrototypeTab(tab) {
+      document.querySelectorAll("[data-prototype-tab]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.prototypeTab === tab);
+      });
+      document.querySelectorAll("[data-prototype-actions]").forEach((bar) => {
+        bar.classList.toggle("active", bar.dataset.prototypeActions === tab);
+      });
+      document.querySelectorAll("[data-prototype-pane]").forEach((pane) => {
+        pane.classList.toggle("active", pane.dataset.prototypePane === tab);
+      });
+      locomoPrototypeMark(`已进入${{import:"导入",evaluate:"评测",run:"运行",results:"结果"}[tab]}子页面`);
+    }
+    function locomoPrototypeFilter(button) {
+      button.parentElement.querySelectorAll("button").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      locomoPrototypeMark(`筛选：${button.textContent}`);
+    }
+    function locomoPrototypeMark(message) {
+      const subtitle = document.querySelector(".app-side .app-subtitle");
+      if (subtitle) subtitle.textContent = message;
+    }
+  </script>
 </body>
 </html>

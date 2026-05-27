@@ -881,6 +881,10 @@ INDEX_HTML = r"""<!doctype html>
                   <span id="memoryTargetLabel">echo://sessions/-</span>
                 </div>
                 <div class="memory-card">
+                  <strong>归档状态</strong>
+                  <span id="commitStatusLabel">未提交</span>
+                </div>
+                <div class="memory-card">
                   <strong>操作</strong>
                   <button class="chip-button" id="memoryRefresh">刷新 EchoMemory 信息</button>
                 </div>
@@ -978,6 +982,11 @@ INDEX_HTML = r"""<!doctype html>
       return sessionId();
     }
     function show(id, value) { $(id).textContent = JSON.stringify(value, null, 2); }
+    function setCommitStatus(text, detail = null) {
+      $("commitStatusLabel").textContent = text;
+      $("sideStatus").textContent = text;
+      if (detail) show("last", detail);
+    }
     function authHeaders(base = {}) {
       const headers = {...base};
       if (activeAccount?.authKey) headers["X-Auth-Key"] = activeAccount.authKey;
@@ -1020,6 +1029,17 @@ INDEX_HTML = r"""<!doctype html>
       $("currentAccountLabel").textContent = activeAccount?.label || "local account";
       $("userId").value = activeAccount?.id || "local";
     }
+    async function accountRequest(path, payload) {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload || {})
+      });
+      const data = await response.json();
+      show("last", data);
+      if (!response.ok || data.error) throw new Error(data.message || data.error || response.statusText);
+      return data;
+    }
     function switchAccount(accountId) {
       accountRevision += 1;
       activeAccount = accounts.find((item) => item.id === accountId) || accounts[0];
@@ -1044,28 +1064,20 @@ INDEX_HTML = r"""<!doctype html>
       renderSessions();
     }
     async function createAccount() {
-      const revision = accountRevision;
+      const label = (prompt("新账户名称", `account ${accounts.filter((item) => item.id !== "local").length + 1}`) || "").trim();
+      if (!label) return;
       $("createAccount").disabled = true;
       try {
-        const tenant = await request("/api/auth/tenants", {method: "POST", body: "{}"});
-        if (!isCurrentAccount(revision)) return;
-        const tenantId = tenant.tenant?.tenant_id;
-        if (!tenantId) throw new Error("tenant creation returned no id");
-        const user = await request(`/api/auth/tenants/${encodeURIComponent(tenantId)}/users`, {
-          method: "POST",
-          body: "{}"
-        });
-        if (!isCurrentAccount(revision)) return;
-        const userId = user.user?.user_id;
-        if (!userId) throw new Error("user creation returned no id");
-        const key = await request(`/api/auth/tenants/${encodeURIComponent(tenantId)}/users/${encodeURIComponent(userId)}/key`, {
-          method: "POST",
-          body: "{}"
-        });
-        if (!isCurrentAccount(revision)) return;
-        if (!key.auth_key) throw new Error("auth key creation returned no key");
-        const label = `account ${accounts.filter((item) => item.id !== "local").length + 1}`;
-        activeAccount = {id: tenantId, label, tenantId, userId, authKey: key.auth_key};
+        const data = await accountRequest("/agent/accounts/create", {label});
+        const account = data.account;
+        if (!account?.authKey) throw new Error("account creation returned no authKey");
+        activeAccount = {
+          id: account.id,
+          label: account.label,
+          tenantId: account.tenantId,
+          userId: account.userId,
+          authKey: account.authKey
+        };
         accounts = [activeAccount, ...accounts];
         accountRevision += 1;
         saveAccounts();
@@ -1077,54 +1089,59 @@ INDEX_HTML = r"""<!doctype html>
         $("createAccount").disabled = false;
       }
     }
-    async function ensureNamedAccount(label = "locomo") {
-      const data = await request("/agent/accounts/ensure", {
-        method: "POST",
-        body: JSON.stringify({label})
-      });
+    async function ensureNamedAccount(label = "locomo", options = {}) {
+      const data = await accountRequest("/agent/accounts/ensure", {label});
       const account = data.account;
       if (!account?.authKey) throw new Error("account ensure returned no authKey");
       const existing = accounts.find((item) => item.id === account.id || item.label === account.label);
-      activeAccount = {
+      const ensuredAccount = {
         id: account.id,
         label: account.label,
         tenantId: account.tenantId,
         userId: account.userId,
         authKey: account.authKey
       };
+      if (options.activate !== false) activeAccount = ensuredAccount;
       accounts = existing
-        ? [activeAccount, ...accounts.filter((item) => item !== existing)]
-        : [activeAccount, ...accounts];
-      accountRevision += 1;
+        ? [ensuredAccount, ...accounts.filter((item) => item !== existing)]
+        : [ensuredAccount, ...accounts];
+      if (options.activate !== false) accountRevision += 1;
       saveAccounts();
-      clearAccountView();
+      if (options.activate !== false) clearAccountView();
       renderAccounts();
-      resetConversation();
-      show("last", {account: activeAccount.label, status: data.created ? "created" : "found"});
+      if (options.activate !== false) resetConversation();
+      show("last", {account: ensuredAccount.label, status: data.created ? "created" : "found"});
     }
     async function ensureLocomoAccountOnStartup() {
       if (accounts.some((item) => item.label === "locomo" || item.id === "locomo")) return;
       try {
-        await ensureNamedAccount("locomo");
+        await ensureNamedAccount("locomo", {activate: false});
       } catch (error) {
         show("last", {warning: `locomo account ensure failed: ${error.message}`});
       }
     }
     async function forgetAccount() {
       if (!activeAccount || activeAccount.id === "local") return;
-      const revision = accountRevision;
-      const accountId = activeAccount.id;
+      const removedAccount = activeAccount;
       $("forgetAccount").disabled = true;
       try {
-        await request("/api/auth/account/delete", {method: "POST", body: "{}"});
-        if (!isCurrentAccount(revision)) return;
-        accounts = accounts.filter((item) => item.id !== accountId);
-        localStorage.removeItem(`${sessionStoreKey}.${accountId}`);
+        try {
+          await fetch("/api/auth/account/delete", {method: "POST", headers: authHeaders({"Content-Type": "application/json"}), body: "{}"});
+        } catch {
+          // Local removal should still work if EchoMemory is temporarily unavailable.
+        }
+        try {
+          await accountRequest("/agent/accounts/forget", {id: removedAccount.id, label: removedAccount.label});
+        } catch {
+          // Registry cleanup is best-effort; the local account list is the source for this page.
+        }
+        accounts = accounts.filter((item) => item.id !== removedAccount.id);
+        localStorage.removeItem(`${sessionStoreKey}.${removedAccount.id}`);
         activeAccount = accounts[0] || {id: "local", label: "local account", authKey: ""};
         accountRevision += 1;
         saveAccounts();
         switchAccount(activeAccount.id);
-        show("last", {account: accountId, status: "deleted"});
+        show("last", {account: removedAccount.label || removedAccount.id, status: "removed"});
       } finally {
         $("forgetAccount").disabled = false;
       }
@@ -1475,9 +1492,16 @@ INDEX_HTML = r"""<!doctype html>
         if (!isCurrentAccount(revision)) throw new Error("account switched");
         show("last", data);
         if (!response.ok || data.error) throw new Error(data.message || data.error || `commit status ${response.status}`);
-        if (data.status?.status === "completed") return data.status;
-        if (data.status?.status === "failed") throw new Error(data.status.error || "commit failed");
-        if (attempt % 10 === 0) $("sideStatus").textContent = `等待 commit 完成：${archiveId}`;
+        const statusValue = data.status?.status || "processing";
+        if (statusValue === "completed") {
+          setCommitStatus(`归档完成：${archiveId}`, data);
+          return data.status;
+        }
+        if (statusValue === "failed") {
+          setCommitStatus(`归档失败：${archiveId}`, data);
+          throw new Error(data.status.error || "commit failed");
+        }
+        setCommitStatus(`归档处理中：${archiveId}（${statusValue}）`, data);
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
       throw new Error(`commit timeout: ${archiveId}`);
@@ -1644,21 +1668,35 @@ INDEX_HTML = r"""<!doctype html>
     };
     async function commitCurrentSession() {
       const sessionIdForCommit = ensureSessionId();
+      $("commitChip").disabled = true;
+      setCommitStatus("正在提交归档...");
+      if (activeSession?.id === sessionIdForCommit) bubble("tool", "正在提交归档...");
       const data = await request(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commit`, {
         method: "POST",
         body: "{}"
       });
-      if (activeSession?.id === sessionIdForCommit) bubble("assistant", `commit accepted -> ${data.result.archive_id}`);
-      else rememberMessageFor(sessionIdForCommit, "assistant", `commit accepted -> ${data.result.archive_id}`);
       const commitId = data.result.commit_id || data.result.archive_id;
-      const status = await waitCommit(sessionIdForCommit, commitId);
-      const memorySummary = await fetchCommitMemories(sessionIdForCommit, commitId);
-      renderCommitMemoryDetails(memorySummary);
-      await refreshInspectors();
-      const message = `commit ${status.status} -> ${commitId}\n${formatCommitMemories(memorySummary)}`;
-      if (activeSession?.id === sessionIdForCommit) bubble("assistant", message);
-      else rememberMessageFor(sessionIdForCommit, "assistant", message);
-      return memorySummary;
+      setCommitStatus(`归档已受理：${commitId}`, data);
+      if (activeSession?.id === sessionIdForCommit) bubble("tool", `归档已受理：${commitId}`);
+      else rememberMessageFor(sessionIdForCommit, "tool", `归档已受理：${commitId}`);
+      try {
+        const status = await waitCommit(sessionIdForCommit, commitId);
+        const memorySummary = await fetchCommitMemories(sessionIdForCommit, commitId);
+        renderCommitMemoryDetails(memorySummary);
+        await refreshInspectors();
+        setCommitStatus(`归档完成：${commitId}`, {status, summary: memorySummary});
+        const message = `归档完成：${commitId}\n${formatCommitMemories(memorySummary)}`;
+        if (activeSession?.id === sessionIdForCommit) bubble("tool", message);
+        else rememberMessageFor(sessionIdForCommit, "tool", message);
+        return memorySummary;
+      } catch (error) {
+        setCommitStatus(`归档失败：${commitId}`, {error: error.message});
+        if (activeSession?.id === sessionIdForCommit) bubble("tool", `归档失败：${error.message}`);
+        else rememberMessageFor(sessionIdForCommit, "tool", `归档失败：${error.message}`);
+        throw error;
+      } finally {
+        $("commitChip").disabled = false;
+      }
     }
     async function runMemoryTest() {
       const kind = $("memoryTestKind").value || "all";
@@ -1769,10 +1807,13 @@ LOCOMO_HTML = r"""<!doctype html>
     .head h2 { margin:0; font-size:16px; }
     .status,.muted { color:var(--muted); font-size:12px; }
     .toolbar { display:flex; flex-wrap:wrap; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line); background:#f7f9fd; }
+    .actionbar { display:none; flex-wrap:wrap; gap:8px; align-items:end; width:100%; }
+    .actionbar.active { display:flex; }
     .body { padding:12px; }
     .stack { display:grid; gap:10px; }
-    .sample,.qa,.run,.metric,.event { padding:10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
-    .sample.active,.qa.active { border-color:var(--blue); background:#edf4ff; }
+    .sample,.session,.qa,.run,.metric,.event { padding:10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+    .sample.active,.session.active,.qa.active { border-color:var(--blue); background:#edf4ff; }
+    .session.imported { border-color:#cfd8e5; background:#f7f9fc; color:#536176; cursor:not-allowed; }
     .row { display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:800; }
     .tag { display:inline-flex; align-items:center; padding:2px 7px; border-radius:999px; background:#eef2f7; color:#43536d; font-size:12px; font-weight:800; }
     .tag.good { background:#edf8f1; color:var(--green); }
@@ -1808,23 +1849,44 @@ LOCOMO_HTML = r"""<!doctype html>
     <section>
       <div class="head">
         <div><h2 id="detailTitle">样本详情</h2><div class="status" id="detailSubtitle">选择左侧样本查看详情</div></div>
-        <div class="tabs"><button class="active" data-tab="dataset">数据</button><button data-tab="run">运行</button><button data-tab="results">结果</button></div>
+        <div class="tabs"><button class="active" data-tab="import">导入</button><button data-tab="evaluate">评测</button><button data-tab="run">运行</button><button data-tab="results">结果</button></div>
       </div>
       <div class="toolbar">
-        <button id="selectAll">选择全部 QA</button><button id="clearSelection">清空选择</button><button class="primary" id="startRun">发起评测</button>
-        <label style="width:150px;">用户 ID<input id="userId" value="locomo-user" /></label>
-        <label style="width:160px;">Agent ID<input id="agentId" value="locomo-agent" /></label>
+        <div class="actionbar active" id="actions-import">
+          <button id="selectAllSessions">选择全部会话</button><button id="clearSessions">清空会话</button><button class="primary" id="importSessions">导入所选会话</button>
+          <label style="width:150px;">用户 ID<input id="userId" value="locomo-user" /></label>
+          <label style="width:160px;">Agent ID<input id="agentId" value="locomo-agent" /></label>
+        </div>
+        <div class="actionbar" id="actions-evaluate">
+          <button id="selectAll">选择全部 QA</button><button id="clearSelection">清空 QA</button><button class="primary" id="startRun">发起评测</button>
+          <span class="muted" id="evaluateHint">导入至少一个会话后可评测。</span>
+        </div>
+        <div class="actionbar" id="actions-run">
+          <button id="refreshRunView">刷新当前运行</button><button id="openResults">查看结果</button>
+        </div>
+        <div class="actionbar" id="actions-results">
+          <button id="refreshResultsView">刷新结果</button><button id="backToEvaluate">返回评测</button>
+        </div>
       </div>
       <div class="body">
-        <div class="tab-pane" id="tab-dataset">
+        <div class="tab-pane" id="tab-import">
           <div class="grid">
             <div class="metric"><span class="muted">Sessions</span><strong id="mSessions">-</strong></div>
+            <div class="metric"><span class="muted">Imported</span><strong id="mImported">0</strong></div>
+            <div class="metric"><span class="muted">Selected Conv</span><strong id="mSelectedSessions">0</strong></div>
             <div class="metric"><span class="muted">Turns</span><strong id="mTurns">-</strong></div>
+          </div>
+          <h3>会话导入</h3><div class="stack scroll" id="sessionList"></div>
+          <h3>对话预览</h3><div class="scroll" id="turns"></div>
+        </div>
+        <div class="tab-pane hidden" id="tab-evaluate">
+          <div class="grid">
+            <div class="metric"><span class="muted">Turns</span><strong id="mEvalTurns">-</strong></div>
             <div class="metric"><span class="muted">QA</span><strong id="mQa">-</strong></div>
             <div class="metric"><span class="muted">Selected</span><strong id="mSelected">0</strong></div>
+            <div class="metric"><span class="muted">Ready</span><strong id="mReady">-</strong></div>
           </div>
           <h3>QA</h3><div class="stack scroll" id="qaList"></div>
-          <h3>对话预览</h3><div class="scroll" id="turns"></div>
         </div>
         <div class="tab-pane hidden" id="tab-run"><div class="stack" id="currentRun"></div><h3>事件</h3><div class="stack scroll" id="events"></div></div>
         <div class="tab-pane hidden" id="tab-results"><div class="stack scroll" id="results"></div></div>
@@ -1860,43 +1922,90 @@ LOCOMO_HTML = r"""<!doctype html>
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
-    let dataset = {samples: []}, activeSample = null, selectedQa = new Set(), activeRunId = null, pollTimer = null;
+    let dataset = {samples: []}, activeSample = null, selectedQa = new Set(), selectedSessions = new Set(), importRecords = {}, activeRunId = null, pollTimer = null, locomoAccount = null;
     function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[char])); }
     async function api(path, options = {}) {
-      const response = await fetch(path, {headers: {"Content-Type": "application/json"}, ...options});
+      const headers = {"Content-Type": "application/json", ...(options.headers || {})};
+      if (locomoAccount?.authKey) headers["X-Auth-Key"] = locomoAccount.authKey;
+      const response = await fetch(path, {...options, headers});
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.message || data.error || response.statusText);
       return data;
     }
+    async function ensureLocomoAccount() {
+      const data = await api("/agent/accounts/ensure", {method: "POST", body: JSON.stringify({label: "locomo"})});
+      locomoAccount = data.account;
+      $("datasetStatus").textContent = `locomo 账户已就绪 · ${locomoAccount?.tenantId || locomoAccount?.id || ""}`;
+    }
     async function loadDataset() {
       dataset = await api("/agent/locomo/dataset");
+      await loadImports();
       const manifest = dataset.manifest || {};
       $("datasetStatus").textContent = `${manifest.exists ? "本地数据集已就绪" : "数据集未下载"} · ${manifest.path || ""}`;
       $("sampleCount").textContent = `${dataset.samples.length} samples`;
       renderSamples();
+    }
+    async function loadImports() {
+      const data = await api("/agent/locomo/imports");
+      importRecords = data.by_sample || {};
     }
     function renderSamples() {
       const q = $("sampleSearch").value.trim().toLowerCase();
       const items = dataset.samples.filter((item) => !q || JSON.stringify(item).toLowerCase().includes(q));
       $("samples").innerHTML = items.map((item) => `
         <div class="sample ${activeSample?.sample_id === item.sample_id ? "active" : ""}" data-sample="${escapeHtml(item.sample_id)}">
-          <div class="row"><span>${escapeHtml(item.sample_id)}</span><span class="tag">${item.qa_count} QA</span></div>
+          <div class="row"><span>${escapeHtml(item.sample_id)}</span><span class="tag ${importedCount(item.sample_id) ? "good" : ""}">${importedCount(item.sample_id)}/${item.session_count} imported</span></div>
           <div class="muted">${escapeHtml(item.speaker_a || "-")} / ${escapeHtml(item.speaker_b || "-")} · ${item.session_count} sessions · ${item.turn_count} turns</div>
+          <div class="muted">${item.qa_count} QA</div>
         </div>`).join("");
       [...document.querySelectorAll(".sample")].forEach((node) => node.onclick = () => loadSample(node.dataset.sample));
+    }
+    function importedCount(sampleId) {
+      return (importRecords[sampleId]?.sessions || []).length;
     }
     async function loadSample(sampleId) {
       activeSample = await api(`/agent/locomo/dataset/${encodeURIComponent(sampleId)}`);
       selectedQa = new Set();
+      selectedSessions = new Set((activeSample.sessions || []).filter((session) => !isSessionImported(session.id)).map((session) => session.id));
       $("detailTitle").textContent = `${activeSample.sample_id} 详情`;
       $("detailSubtitle").textContent = `${activeSample.speaker_a || "-"} / ${activeSample.speaker_b || "-"}`;
       renderSamples(); renderSample();
     }
+    function importRecord() {
+      return activeSample ? (importRecords[activeSample.sample_id] || {sessions: []}) : {sessions: []};
+    }
+    function isSessionImported(sessionId) {
+      return new Set(importRecord().sessions || []).has(sessionId);
+    }
     function renderSample() {
       const sessions = activeSample?.sessions || [], qa = activeSample?.qa || [];
+      const imported = new Set(importRecord().sessions || []);
       $("mSessions").textContent = sessions.length;
       $("mTurns").textContent = sessions.reduce((sum, item) => sum + item.turn_count, 0);
+      $("mImported").textContent = imported.size;
+      $("mSelectedSessions").textContent = selectedSessions.size;
+      $("mEvalTurns").textContent = sessions.reduce((sum, item) => sum + item.turn_count, 0);
       $("mQa").textContent = qa.length; $("mSelected").textContent = selectedQa.size;
+      $("mReady").textContent = imported.size > 0 ? "yes" : "no";
+      $("evaluateHint").textContent = imported.size > 0
+        ? `已导入 ${imported.size} 个会话，可选择 QA 发起评测。`
+        : "导入至少一个会话后可评测。";
+      $("sessionList").innerHTML = sessions.map((session) => {
+        const done = imported.has(session.id);
+        const checked = selectedSessions.has(session.id);
+        return `
+          <div class="session ${checked ? "active" : ""} ${done ? "imported" : ""}" data-session="${escapeHtml(session.id)}">
+            <div class="row"><span>${escapeHtml(session.id)}</span><span class="tag ${done ? "good" : ""}">${done ? "已导入" : `${session.turn_count} turns`}</span></div>
+            <div class="muted">${escapeHtml(session.date_time || "")}</div>
+            <div class="muted">${escapeHtml(session.summary || session.observation || "")}</div>
+          </div>`;
+      }).join("") || "<div class='muted'>暂无会话</div>";
+      [...document.querySelectorAll(".session")].forEach((node) => node.onclick = (event) => {
+        if (isSessionImported(node.dataset.session)) return;
+        if (selectedSessions.has(node.dataset.session)) selectedSessions.delete(node.dataset.session);
+        else selectedSessions.add(node.dataset.session);
+        renderSample();
+      });
       $("qaList").innerHTML = qa.map((item) => `
         <div class="qa ${selectedQa.has(item.id) ? "active" : ""}" data-qa="${escapeHtml(item.id)}">
           <div class="row"><span>#${item.index} ${escapeHtml(item.category)}</span><span class="tag">${escapeHtml(item.id)}</span></div>
@@ -1911,15 +2020,43 @@ LOCOMO_HTML = r"""<!doctype html>
       [...document.querySelectorAll(".tabs button")].forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
       [...document.querySelectorAll(".tab-pane")].forEach((pane) => pane.classList.add("hidden"));
       $(`tab-${tab}`).classList.remove("hidden");
+      [...document.querySelectorAll(".actionbar")].forEach((bar) => bar.classList.remove("active"));
+      const actions = $(`actions-${tab}`);
+      if (actions) actions.classList.add("active");
     }
     async function startRun() {
       if (!activeSample) return;
+      if ((importRecord().sessions || []).length === 0) throw new Error("请先导入至少一个会话");
       const qaIds = selectedQa.size ? [...selectedQa] : activeSample.qa.map((item) => item.id);
       $("startRun").disabled = true;
       try {
         const run = await api("/agent/locomo/runs", {method: "POST", body: JSON.stringify({sample_ids: [activeSample.sample_id], qa_ids: {[activeSample.sample_id]: qaIds}, user_id: $("userId").value.trim(), agent_id: $("agentId").value.trim()})});
         activeRunId = run.run_id; setTab("run"); pollRun();
       } finally { $("startRun").disabled = false; }
+    }
+    async function importSelectedSessions() {
+      if (!activeSample) return;
+      const sessionIds = [...selectedSessions].filter((id) => !isSessionImported(id));
+      if (sessionIds.length === 0) return;
+      $("importSessions").disabled = true;
+      try {
+        const data = await api("/agent/locomo/imports", {
+          method: "POST",
+          body: JSON.stringify({
+            sample_ids: [activeSample.sample_id],
+            session_ids: {[activeSample.sample_id]: sessionIds},
+            user_id: $("userId").value.trim(),
+            agent_id: $("agentId").value.trim()
+          })
+        });
+        await loadImports();
+        selectedSessions = new Set((activeSample.sessions || []).filter((session) => !isSessionImported(session.id)).map((session) => session.id));
+        renderSample();
+        $("sideStatus").textContent = "imported";
+        $("sideProgress").textContent = JSON.stringify(data.imports?.[0] || data, null, 2);
+      } finally {
+        $("importSessions").disabled = false;
+      }
     }
     async function pollRun() {
       if (!activeRunId) return;
@@ -1947,11 +2084,19 @@ LOCOMO_HTML = r"""<!doctype html>
     }
     $("sync").onclick = async () => { await api("/agent/locomo/dataset/sync", {method:"POST", body:JSON.stringify({force:true})}); await loadDataset(); };
     $("sampleSearch").oninput = renderSamples;
+    $("selectAllSessions").onclick = () => { if (activeSample) { selectedSessions = new Set(activeSample.sessions.filter((item) => !isSessionImported(item.id)).map((item) => item.id)); renderSample(); } };
+    $("clearSessions").onclick = () => { selectedSessions = new Set(); renderSample(); };
+    $("importSessions").onclick = () => importSelectedSessions().catch((error) => $("sideProgress").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`);
     $("selectAll").onclick = () => { if (activeSample) { selectedQa = new Set(activeSample.qa.map((item) => item.id)); renderSample(); } };
     $("clearSelection").onclick = () => { selectedQa = new Set(); renderSample(); };
-    $("startRun").onclick = startRun; $("refreshRuns").onclick = loadRuns;
+    $("startRun").onclick = () => startRun().catch((error) => $("sideProgress").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`);
+    $("refreshRuns").onclick = loadRuns;
+    $("refreshRunView").onclick = () => activeRunId ? pollRun() : loadRuns();
+    $("openResults").onclick = () => setTab("results");
+    $("refreshResultsView").onclick = () => activeRunId ? pollRun() : loadRuns();
+    $("backToEvaluate").onclick = () => setTab("evaluate");
     [...document.querySelectorAll(".tabs button")].forEach((button) => button.onclick = () => setTab(button.dataset.tab));
-    loadDataset().catch((error) => $("datasetStatus").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`);
+    ensureLocomoAccount().then(loadDataset).catch((error) => $("datasetStatus").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`);
     loadRuns().catch(() => {});
   </script>
 </body>
@@ -1998,6 +2143,9 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         if path == "/agent/locomo/runs":
             self._locomo_runs()
             return
+        if path == "/agent/locomo/imports":
+            self._locomo_imports()
+            return
         if path.startswith("/agent/locomo/runs/"):
             self._locomo_run_get(path)
             return
@@ -2019,6 +2167,12 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             return
         if path == "/agent/accounts/ensure":
             self._agent_account_ensure()
+            return
+        if path == "/agent/accounts/create":
+            self._agent_account_create()
+            return
+        if path == "/agent/accounts/forget":
+            self._agent_account_forget()
             return
         if path == "/agent/locomo/dataset/sync":
             self._locomo_dataset_sync()
@@ -2132,6 +2286,19 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         except LocomoEvalError as exc:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "locomo_eval_error", "message": str(exc)})
 
+    def _locomo_imports(self) -> None:
+        try:
+            self._send_json(HTTPStatus.OK, LocomoEvalService(self._request_config()).import_status())
+        except LocomoEvalError as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "locomo_eval_error", "message": str(exc)})
+
+    def _locomo_import_create(self) -> None:
+        try:
+            data = LocomoEvalService(self._request_config()).import_samples(self._read_json())
+            self._send_json(HTTPStatus.OK, data)
+        except (LocomoDatasetError, LocomoEvalError, ValueError) as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "locomo_eval_error", "message": str(exc)})
+
     def _locomo_run_get(self, path: str) -> None:
         try:
             parts = [part for part in path.split("/") if part]
@@ -2145,6 +2312,59 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, data)
         except LocomoEvalError as exc:
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "locomo_eval_error", "message": str(exc)})
+
+    def _agent_account_ensure(self) -> None:
+        try:
+            payload = self._read_json()
+            label = str(payload.get("label") or "locomo").strip() or "locomo"
+            data = self._ensure_account(label)
+            self._send_json(HTTPStatus.OK, data)
+        except (ValueError, OSError, EchoMemoryClientError) as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "account_ensure_error", "message": str(exc)})
+
+    def _agent_account_create(self) -> None:
+        try:
+            payload = self._read_json()
+            label = str(payload.get("label") or "").strip()
+            if not label:
+                raise ValueError("label is required")
+            data = _create_account_record(self.server.config, self.server.echomem_url, label)
+            self._send_json(HTTPStatus.OK, data)
+        except (ValueError, OSError, EchoMemoryClientError) as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "account_create_error", "message": str(exc)})
+
+    def _agent_account_forget(self) -> None:
+        try:
+            payload = self._read_json()
+            label = str(payload.get("label") or "").strip()
+            account_id = str(payload.get("id") or "").strip()
+            data = _forget_account_record(self.server.config, label=label, account_id=account_id)
+            self._send_json(HTTPStatus.OK, data)
+        except (ValueError, OSError) as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "account_forget_error", "message": str(exc)})
+
+    def _ensure_account(self, label: str) -> dict[str, Any]:
+        return _ensure_account_record(self.server.config, self.server.echomem_url, label)
+
+    def _echomem_json(self, path: str, *, method: str = "GET", payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        body = json.dumps(payload or {}, ensure_ascii=False).encode("utf-8") if method != "GET" else None
+        request = Request(
+            urljoin(self.server.echomem_url, path.lstrip("/")),
+            data=body,
+            method=method,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urlopen(request, timeout=10) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise EchoMemoryClientError(f"echomemory_http_{exc.code}: {detail}") from exc
+        except URLError as exc:
+            raise EchoMemoryClientError(f"echomemory_unreachable: {exc.reason}") from exc
+        if not isinstance(data, dict):
+            raise EchoMemoryClientError("EchoMemory response must be a JSON object")
+        return data
 
     def _request_config(self) -> AgentConfig:
         auth_key = self.headers.get("X-Auth-Key", "").strip()
@@ -2196,7 +2416,103 @@ def create_server(
 ) -> AgentPlaygroundServer:
     """Create the standalone agent playground server."""
     config = load_config(config_path, echomem_url=echomem_url)
-    return AgentPlaygroundServer((host, port), AgentRequestHandler, config=config)
+    server = AgentPlaygroundServer((host, port), AgentRequestHandler, config=config)
+    try:
+        _ensure_account_record(config, server.echomem_url, "locomo")
+    except Exception as exc:  # noqa: BLE001 - server can still run without preseeded account.
+        print(f"warning: failed to preseed locomo account: {exc}")
+    return server
+
+
+def _read_registry(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _ensure_account_record(config: AgentConfig, echomem_url: str, label: str) -> dict[str, Any]:
+    registry_path = Path(config.locomo.data_dir) / "accounts.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry = _read_registry(registry_path)
+    if label in registry and registry[label].get("authKey"):
+        return {"created": False, "account": registry[label]}
+    return _create_account_record(config, echomem_url, label, registry=registry)
+
+
+def _create_account_record(
+    config: AgentConfig,
+    echomem_url: str,
+    label: str,
+    *,
+    registry: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not label or "/" in label or "\\" in label:
+        raise ValueError("label must be a non-empty name without path separators")
+    registry_path = Path(config.locomo.data_dir) / "accounts.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry = registry if registry is not None else _read_registry(registry_path)
+    tenant = _echomem_json_url(echomem_url, "/api/auth/tenants", method="POST", payload={})
+    tenant_id = str((tenant.get("tenant") or {}).get("tenant_id") or "")
+    if not tenant_id:
+        raise ValueError("tenant creation returned no id")
+    user = _echomem_json_url(echomem_url, f"/api/auth/tenants/{tenant_id}/users", method="POST", payload={})
+    user_id = str((user.get("user") or {}).get("user_id") or "")
+    if not user_id:
+        raise ValueError("user creation returned no id")
+    key = _echomem_json_url(echomem_url, f"/api/auth/tenants/{tenant_id}/users/{user_id}/key", method="POST", payload={})
+    auth_key = str(key.get("auth_key") or "")
+    if not auth_key:
+        raise ValueError("auth key creation returned no key")
+
+    account = {"id": tenant_id, "label": label, "tenantId": tenant_id, "userId": user_id, "authKey": auth_key}
+    key = label
+    if key in registry:
+        suffix = 2
+        while f"{label} {suffix}" in registry:
+            suffix += 1
+        key = f"{label} {suffix}"
+        account["label"] = key
+    registry[key] = account
+    registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"created": True, "account": account}
+
+
+def _forget_account_record(config: AgentConfig, *, label: str, account_id: str) -> dict[str, Any]:
+    registry_path = Path(config.locomo.data_dir) / "accounts.json"
+    registry = _read_registry(registry_path)
+    removed = []
+    for key, account in list(registry.items()):
+        if (label and key == label) or (account_id and str(account.get("id") or "") == account_id):
+            removed.append(account)
+            registry.pop(key, None)
+    if registry_path.exists():
+        registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"status": "forgotten", "removed": removed}
+
+
+def _echomem_json_url(echomem_url: str, path: str, *, method: str = "GET", payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    body = json.dumps(payload or {}, ensure_ascii=False).encode("utf-8") if method != "GET" else None
+    request = Request(
+        urljoin(echomem_url, path.lstrip("/")),
+        data=body,
+        method=method,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urlopen(request, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise EchoMemoryClientError(f"echomemory_http_{exc.code}: {detail}") from exc
+    except URLError as exc:
+        raise EchoMemoryClientError(f"echomemory_unreachable: {exc.reason}") from exc
+    if not isinstance(data, dict):
+        raise EchoMemoryClientError("EchoMemory response must be a JSON object")
+    return data
 
 
 def serve(host: str = "127.0.0.1", port: int = 8765, echomem_url: str | None = None) -> None:

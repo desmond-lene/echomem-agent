@@ -39,7 +39,7 @@ class LocomoEvalService:
                 imports.append(self._read_json(path))
             except LocomoEvalError:
                 continue
-        return {"imports": imports}
+        return {"imports": imports, "by_sample": {str(item.get("sample_id")): item for item in imports if item.get("sample_id")}}
 
     def import_samples(self, payload: dict[str, Any]) -> dict[str, Any]:
         sample_ids = _string_list(payload.get("sample_ids"))
@@ -58,7 +58,7 @@ class LocomoEvalService:
         if not sample_ids:
             raise LocomoEvalError("sample_ids is required")
         selected_samples = self.dataset.samples_for(sample_ids)
-        missing = [sample["sample_id"] for sample in selected_samples if not self._import_record(sample["sample_id"]).get("imported")]
+        missing = [sample["sample_id"] for sample in selected_samples if not self._import_record(sample["sample_id"]).get("sessions")]
         if missing:
             raise LocomoEvalError(f"samples must be imported before evaluation: {', '.join(missing)}")
         selected = self._select_items(selected_samples, payload.get("qa_ids"))
