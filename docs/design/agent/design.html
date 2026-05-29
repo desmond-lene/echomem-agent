@@ -1,0 +1,124 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chenmo Evaluation Design</title>
+  <style>
+    body { margin:0; font-family: "Segoe UI", "PingFang SC", sans-serif; background:#f6f8fc; color:#182235; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 24px; }
+    .hero, .section { background:#fff; border:1px solid #dbe3f1; border-radius:14px; padding:18px; margin-bottom:14px; }
+    h1 { margin:0 0 8px; font-size:30px; }
+    h2 { margin:0 0 8px; font-size:22px; }
+    p { margin:8px 0; color:#4b5568; }
+    .kpi { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap:10px; }
+    .card { border:1px solid #e3eaf7; border-radius:10px; padding:12px; background:#fafcff; }
+    .mono { font-family: Consolas, monospace; font-size:12px; color:#263148; }
+    table { width:100%; border-collapse: collapse; margin-top:8px; }
+    th, td { border:1px solid #dbe3f1; padding:8px; text-align:left; vertical-align:top; font-size:13px; }
+    th { background:#eef3fd; }
+    ul { margin:8px 0 0; }
+    .ok { color:#0f8a39; font-weight:700; }
+    .warn { color:#a06800; font-weight:700; }
+    .bad { color:#c0392b; font-weight:700; }
+    @media (max-width:980px) { .kpi { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <h1>Chenmo 场景改造设计（遵守 Principle）</h1>
+      <p>生成日期：2026-05-29。原则来源：<span class="mono">docs/design/agent/principle.html</span>（从 echomemory 同步）。</p>
+      <p>目标：不做用例定制逻辑，在通用架构下提升长时记忆场景的时序、多跳、因果与综合推理通过率。</p>
+      <div class="kpi">
+        <div class="card"><strong>31</strong><br/>总题数</div>
+        <div class="card"><strong>9</strong><br/>通过</div>
+        <div class="card"><strong>22</strong><br/>失败</div>
+        <div class="card"><strong>29.03%</strong><br/>通过率</div>
+      </div>
+      <p class="mono">评测结果：docs/design/agent/chenmo_eval_results.json</p>
+      <p class="mono">阶段进度：docs/design/agent/chenmo_eval_progress.jsonl（导入/逐题实时）</p>
+    </section>
+
+    <section class="section">
+      <h2>1. 失败模式分析</h2>
+      <table>
+        <thead><tr><th>类别</th><th>数量</th><th>现象</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr><td>temporal_reasoning_gap</td><td>4</td><td>T2/T3/T5/T6 常缺月度跨度与阶段顺序</td><td>检索有内容，但回答器缺显式时间算子</td></tr>
+          <tr><td>multi_hop_reasoning_gap</td><td>4</td><td>M2/M4/M6/M7 关系链断裂或实体别名混淆</td><td>缺 2~3 hop 路径拼接与冲突消解</td></tr>
+          <tr><td>causal_reasoning_gap</td><td>6</td><td>C1~C6 直接原因/根因区分不稳</td><td>事件因果边不足，检索后无因果重排</td></tr>
+          <tr><td>task_reasoning_gap</td><td>4</td><td>CT3~CT6 任务堆叠/角色冲突回答稀疏</td><td>Task 不是一等实体，证据聚合弱</td></tr>
+          <tr><td>comprehensive_reasoning_gap</td><td>4</td><td>COMP1/2/4/5 长跨度综合题失分</td><td>缺 timeline summary + goal/risk 抽象层</td></tr>
+          <tr><td>answer_contradiction</td><td>1</td><td>M7 出现“同一公司”误判</td><td>缺实体一致性与反事实检查</td></tr>
+        </tbody>
+      </table>
+      <p><span class="warn">关键观察</span>：绝大部分失败的 <span class="mono">retrieval_failure=ok</span>，说明主要瓶颈已从“召回不到”转为“召回后推理与组织不够”。</p>
+    </section>
+
+    <section class="section">
+      <h2>2. 设计原则约束映射</h2>
+      <table>
+        <thead><tr><th>Principle</th><th>约束</th><th>本方案做法</th></tr></thead>
+        <tbody>
+          <tr><td>领域优先</td><td>业务规则不依赖基础设施</td><td>新增 Event/Task/Cause 领域对象，只在接口层暴露 DTO</td></tr>
+          <tr><td>接口隔离（ISP）</td><td>能力拆分而非大一统</td><td>新增 TemporalResolver、GraphReasoner、AnswerPlanner 三个小接口</td></tr>
+          <tr><td>依赖反转（DIP）</td><td>服务层依赖抽象</td><td>recall orchestrator 只依赖 planner 协议，具体实现可替换</td></tr>
+          <tr><td>可测试（AIR）</td><td>默认可离线单测</td><td>每个模块提供 fake 输入与固定回放样例，不依赖外部 LLM 才能回归</td></tr>
+          <tr><td>作用域最小化</td><td>默认最小 scope</td><td>query plan 强制携带 user/agent/session，跨会话需显式开启</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>3. 对 echomemory 的通用改造</h2>
+      <p><strong>3.1 Recall 编排增强（不改业务接口，增强内部计划）</strong></p>
+      <ul>
+        <li>在 <span class="mono">echomemory/src/echomem/recall/local_recall_orchestrator.py</span> 增加 query-plan 后处理：按问题类型拆分子查询（time/entity/cause/task）。</li>
+        <li>为 graph 引擎增加二次召回策略：第一次取证据，第二次按缺失槽位补召回（而非仅 broad retry）。</li>
+        <li>新增去重与一致性约束：实体别名归一 + 关系方向约束，降低 M7 类矛盾。</li>
+      </ul>
+      <p><strong>3.2 领域模型补强（事件/因果/任务）</strong></p>
+      <ul>
+        <li>新增 EventEdge（发生时间、参与者、结果）、CauseEdge（直接原因/根因）、TaskNode（目标/状态/依赖）。</li>
+        <li>commit 抽取阶段把“离职、融资、手术、团队拆分、邀请/拒绝”等模式结构化写入图，而非只落 episode 文本。</li>
+      </ul>
+      <p><strong>3.3 回答规划器（Answer Planner）</strong></p>
+      <ul>
+        <li>在检索后新增规划阶段：先形成证据表（时间线/关系链/因果链），再生成回答。</li>
+        <li>回答前做 contradiction check：同题内关键结论不允许互斥（如“同一公司/不同公司”冲突）。</li>
+      </ul>
+      <p><strong>3.4 可观测与回归</strong></p>
+      <ul>
+        <li>保留每题 artifacts：query plan、召回项、证据链、最终回答、判分。</li>
+        <li>把 Chenmo 场景纳入长期回归集，目标是阶段性提升而非一次性调参过拟合。</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>4. 分阶段实施计划</h2>
+      <table>
+        <thead><tr><th>阶段</th><th>目标</th><th>主要改动</th><th>验收</th></tr></thead>
+        <tbody>
+          <tr><td>P0（1周）</td><td>先提升可观测与稳定性</td><td>query-plan日志、artifact落盘、矛盾检查</td><td>评测过程可追踪；矛盾题明显下降</td></tr>
+          <tr><td>P1（2周）</td><td>补齐时序/多跳</td><td>时间算子、2~3hop 子图拼接、别名归一</td><td>T/M 维度通过率明显提升</td></tr>
+          <tr><td>P2（2周）</td><td>补齐因果/任务</td><td>CauseEdge/TaskNode 抽取与检索</td><td>C/CT 维度通过率明显提升</td></tr>
+          <tr><td>P3（1周）</td><td>综合题收敛</td><td>goal-risk-progress 汇总器</td><td>COMP 通过率提升，整体>60%</td></tr>
+        </tbody>
+      </table>
+      <p><span class="bad">禁止项</span>：任何基于题号或关键词硬编码的“命中即通过”逻辑；任何只为 Chenmo 单场景生效的特判分支。</p>
+    </section>
+
+    <section class="section">
+      <h2>5. 本轮交付清单</h2>
+      <ul>
+        <li><span class="mono">scripts/run_chenmo_eval.py</span>：已改为分阶段执行，支持实时进展与每题结果落盘。</li>
+        <li><span class="mono">docs/design/agent/chenmo_eval_progress.jsonl</span>：导入与逐题执行日志。</li>
+        <li><span class="mono">docs/design/agent/chenmo_eval_partial.json</span>：逐题更新快照。</li>
+        <li><span class="mono">docs/design/agent/principle.html</span>：从 echomemory 同步原则文档。</li>
+        <li><span class="mono">docs/design/agent/design.html</span>：本设计说明。</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

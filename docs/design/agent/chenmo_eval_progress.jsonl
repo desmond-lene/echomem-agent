@@ -1,0 +1,74 @@
+{"ts": "2026-05-29T07:57:02.724939+00:00", "stage": "bootstrap", "status": "running", "payload": {"scenario_path": "docs\\design\\agent\\evaluation_scenario.md", "question_count": 31, "label": "chenmo-eval-20260529_075702"}}
+{"ts": "2026-05-29T07:57:02.726761+00:00", "stage": "import", "status": "running", "payload": {"session_id": "chenmo-ingest-20260529_075702", "turn_count": 64}}
+{"ts": "2026-05-29T07:57:03.300097+00:00", "stage": "import", "status": "progress", "payload": {"imported_turns": 10, "total_turns": 64}}
+{"ts": "2026-05-29T07:57:03.597511+00:00", "stage": "import", "status": "progress", "payload": {"imported_turns": 20, "total_turns": 64}}
+{"ts": "2026-05-29T07:57:03.847439+00:00", "stage": "import", "status": "progress", "payload": {"imported_turns": 30, "total_turns": 64}}
+{"ts": "2026-05-29T07:57:04.085400+00:00", "stage": "import", "status": "progress", "payload": {"imported_turns": 40, "total_turns": 64}}
+{"ts": "2026-05-29T07:57:04.294941+00:00", "stage": "import", "status": "progress", "payload": {"imported_turns": 50, "total_turns": 64}}
+{"ts": "2026-05-29T07:57:04.486231+00:00", "stage": "import", "status": "progress", "payload": {"imported_turns": 60, "total_turns": 64}}
+{"ts": "2026-05-29T07:57:04.588584+00:00", "stage": "import", "status": "progress", "payload": {"imported_turns": 64, "total_turns": 64}}
+{"ts": "2026-05-29T08:04:02.484746+00:00", "stage": "import", "status": "completed", "payload": {"session_id": "chenmo-ingest-20260529_075702", "commit_id": "archive_001", "commit_status": {"session_id": "chenmo-ingest-20260529_075702", "commit_id": "archive_001", "archive_id": "archive_001", "status": "completed", "accepted_at": "2026-05-29T07:57:04.606Z", "committed_at": "2026-05-29T07:57:04.608Z", "error": null}}}
+{"ts": "2026-05-29T08:04:02.486382+00:00", "stage": "qa", "status": "running", "payload": {"total_questions": 31}}
+{"ts": "2026-05-29T08:04:02.487890+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 1, "question_id": "T1", "question": "陈默在阿里巴巴和字节跳动分别工作了多长时间？哪家时间更长？"}}
+{"ts": "2026-05-29T08:04:42.187920+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 1, "question_id": "T1", "passed": true, "score": 0.75, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:04:42.188606+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 2, "question_id": "T2", "question": "智云科技从成立到产品正式上线间隔了多久？"}}
+{"ts": "2026-05-29T08:05:01.918052+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 2, "question_id": "T2", "passed": false, "score": 0.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:05:01.918641+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 3, "question_id": "T3", "question": "陈默儿子出生时，他正处在职业生涯的哪个阶段？"}}
+{"ts": "2026-05-29T08:05:35.470021+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 3, "question_id": "T3", "passed": false, "score": 0.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:05:35.470559+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 4, "question_id": "T4", "question": "按时间顺序排列以下事件：①甲状腺结节体检 ②字节技术卓越奖 ③智云Pre-A轮融资 ④结婚"}}
+{"ts": "2026-05-29T08:06:07.138893+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 4, "question_id": "T4", "passed": true, "score": 1.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:06:07.139529+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 5, "question_id": "T5", "question": "陈默父亲做手术时，智云科技的B轮融资完成了吗？"}}
+{"ts": "2026-05-29T08:06:43.702876+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 5, "question_id": "T5", "passed": false, "score": 0.5, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:06:43.703698+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 6, "question_id": "T6", "question": "从陈默离开字节到智云产品上线，中间经历了哪些公司/阶段？按顺序列出。"}}
+{"ts": "2026-05-29T08:08:22.432246+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 6, "question_id": "T6", "passed": false, "score": 0.5, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:08:22.432756+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 7, "question_id": "M1", "question": "陈默的第一个大客户\"云梯科技\"与陈默前东家的关系是什么？"}}
+{"ts": "2026-05-29T08:09:24.140900+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 7, "question_id": "M1", "passed": true, "score": 1.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:09:24.141534+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 8, "question_id": "M2", "question": "如果陈默需要联系给智云A轮投资的机构，他可以通过谁牵线？这个人和他是什么关系？"}}
+{"ts": "2026-05-29T08:10:10.044243+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 8, "question_id": "M2", "passed": false, "score": 0.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:10:10.044793+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 9, "question_id": "M3", "question": "周强离职后去了哪家公司？这家公司的业务方向和智云科技的转型方向有什么关联？"}}
+{"ts": "2026-05-29T08:10:58.647853+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 9, "question_id": "M3", "passed": true, "score": 1.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:10:58.648654+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 10, "question_id": "M4", "question": "陈默的妻子李婷现在在哪家公司工作？她之前和陈默在哪个公司共事过？"}}
+{"ts": "2026-05-29T08:11:40.661581+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 10, "question_id": "M4", "passed": false, "score": 0.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:11:40.662200+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 11, "question_id": "M5", "question": "马东在创办智云科技之前，在哪家公司工作？他当时的下属有谁后来成为了他的联合创始人？"}}
+{"ts": "2026-05-29T08:12:27.656101+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 11, "question_id": "M5", "passed": true, "score": 1.0, "retrieval_failure": "episodes_only"}}
+{"ts": "2026-05-29T08:12:27.656603+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 12, "question_id": "M6", "question": "智云科技新任CTO吴军之前在哪里工作？这个机构与陈默大学同学刘洋的现任雇主有什么关系？"}}
+{"ts": "2026-05-29T08:13:08.953398+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 12, "question_id": "M6", "passed": false, "score": 0.3333, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:13:08.954825+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 13, "question_id": "M7", "question": "陈默的室友刘洋创办的公司被谁收购了？收购方与陈默现任妻子李婷的现任雇主是同一家公司吗？"}}
+{"ts": "2026-05-29T08:13:52.757439+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 13, "question_id": "M7", "passed": false, "score": 1.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:13:52.758134+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 14, "question_id": "C1", "question": "陈默2020年从阿里巴巴离职的直接原因是什么？根本原因是什么？"}}
+{"ts": "2026-05-29T08:14:13.097862+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 14, "question_id": "C1", "passed": false, "score": 0.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:14:13.098492+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 15, "question_id": "C2", "question": "周强为什么离职并加入竞对公司？"}}
+{"ts": "2026-05-29T08:14:39.228220+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 15, "question_id": "C2", "passed": false, "score": 0.5, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:14:39.228894+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 16, "question_id": "C3", "question": "陈默2023年8月变现字节期权并投入公司的原因是什么？"}}
+{"ts": "2026-05-29T08:15:03.902562+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 16, "question_id": "C3", "passed": false, "score": 0.6667, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:15:03.903359+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 17, "question_id": "C4", "question": "为什么智云科技能在2024年上半年实现营收突破和续约率大幅提升？"}}
+{"ts": "2026-05-29T08:15:36.625928+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 17, "question_id": "C4", "passed": false, "score": 0.3333, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:15:36.626599+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 18, "question_id": "C5", "question": "陈默2025年9月提议拆分产品团队的直接原因是什么？"}}
+{"ts": "2026-05-29T08:15:54.320172+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 18, "question_id": "C5", "passed": false, "score": 0.5, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:15:54.321162+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 19, "question_id": "C6", "question": "陈默为什么婉拒了刘洋邀请加入小米汽车的机会？"}}
+{"ts": "2026-05-29T08:16:15.393263+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 19, "question_id": "C6", "passed": false, "score": 0.5, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:16:15.393803+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 20, "question_id": "C7", "question": "马东为什么能在2023年公司濒死时拿出200万注入公司？"}}
+{"ts": "2026-05-29T08:16:39.047987+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 20, "question_id": "C7", "passed": true, "score": 1.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:16:39.048732+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 21, "question_id": "CT1", "question": "智云客服产品从开发到获取第一个大客户，涉及哪些人物/公司的协作链条？"}}
+{"ts": "2026-05-29T08:17:29.144268+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 21, "question_id": "CT1", "passed": true, "score": 1.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:17:29.145061+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 22, "question_id": "CT2", "question": "陈默在字节跳动获得的\"技术卓越奖\"和后来智云科技B轮融资成功之间，存在什么样的能力关联？"}}
+{"ts": "2026-05-29T08:18:41.704027+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 22, "question_id": "CT2", "passed": true, "score": 1.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:18:41.704649+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 23, "question_id": "CT3", "question": "2025年陈默身兼哪些角色/责任？这些角色之间是否存在冲突或依赖关系？"}}
+{"ts": "2026-05-29T08:19:24.001333+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 23, "question_id": "CT3", "passed": false, "score": 0.3333, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:19:24.002452+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 24, "question_id": "CT4", "question": "如果要分析智云科技2023年濒临破产到2024年B轮融资成功的转折点，需要追踪哪些关键决策链？"}}
+{"ts": "2026-05-29T08:20:23.408950+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 24, "question_id": "CT4", "passed": false, "score": 0.5, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:20:23.409740+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 25, "question_id": "CT5", "question": "陈默的职业决策中，哪些可以视为\"对冲\"或\"风险分散\"策略？"}}
+{"ts": "2026-05-29T08:21:23.771362+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 25, "question_id": "CT5", "passed": false, "score": 0.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:21:23.772248+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 26, "question_id": "CT6", "question": "描述陈默在2025年5-7月期间面临的\"任务堆叠\"情况，以及他如何解决优先级冲突。"}}
+{"ts": "2026-05-29T08:22:02.814399+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 26, "question_id": "CT6", "passed": false, "score": 0.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:22:02.815688+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 27, "question_id": "COMP1", "question": "如果陈默2021年没有接受马东的邀请加入智云科技，他的人生轨迹可能会有哪些不同？基于已有信息做合理推断。"}}
+{"ts": "2026-05-29T08:22:55.548992+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 27, "question_id": "COMP1", "passed": false, "score": 0.3333, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:22:55.550591+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 28, "question_id": "COMP2", "question": "从陈默的人际网络中，找出对他职业生涯影响最大的三个人，并说明各自的影响机制。"}}
+{"ts": "2026-05-29T08:23:50.816293+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 28, "question_id": "COMP2", "passed": false, "score": 0.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:23:50.817949+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 29, "question_id": "COMP3", "question": "对比陈默在阿里、字节、智云三家公司的\"工作-健康\"关系，他的健康意识经历了怎样的变化？"}}
+{"ts": "2026-05-29T08:25:01.729722+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 29, "question_id": "COMP3", "passed": true, "score": 1.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:25:01.730404+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 30, "question_id": "COMP4", "question": "智云科技的股权结构在关键节点发生了哪些变化？这些变化反映了什么样的治理演进？"}}
+{"ts": "2026-05-29T08:26:08.038582+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 30, "question_id": "COMP4", "passed": false, "score": 0.0, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:26:08.039205+00:00", "stage": "qa_item", "status": "running", "payload": {"number": 31, "question_id": "COMP5", "question": "基于陈默的目标（40岁前财务自由、回杭州养老、2028年IPO），评估他当前（2026年）的进展和风险。"}}
+{"ts": "2026-05-29T08:27:05.878348+00:00", "stage": "qa_item", "status": "completed", "payload": {"number": 31, "question_id": "COMP5", "passed": false, "score": 0.5, "retrieval_failure": "ok"}}
+{"ts": "2026-05-29T08:27:05.884665+00:00", "stage": "qa", "status": "completed", "payload": {"total": 31, "passed": 9, "failed": 22, "pass_rate": 0.2903, "report": "docs\\design\\agent\\chenmo.html", "json": "docs\\design\\agent\\chenmo_eval_results.json"}}

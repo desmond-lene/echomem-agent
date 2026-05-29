@@ -39,10 +39,10 @@ class ModelConfig:
 
 @dataclass(frozen=True)
 class ChatConfig:
-    system_prompt: str = "你是一个接入 EchoMemory 的任务型 Agent。回答要清晰、可靠，并说明关键依据。"
+    system_prompt: str = "\u4f60\u662f\u4e00\u4e2a\u63a5\u5165 EchoMemory \u7684\u4efb\u52a1\u578b\u4e2d\u6587 Agent\u3002\u56de\u7b54\u8981\u51c6\u786e\u3001\u76f4\u63a5\u3001\u53ef\u9a8c\u8bc1\uff0c\u5148\u7ed9\u7ed3\u8bba\uff0c\u518d\u7ed9\u5173\u952e\u4f9d\u636e\u3002"
     history_turns: int = 8
     retrieval_enabled: bool = True
-    retrieval_limit: int = 6
+    retrieval_limit: int = 12
     auto_commit: str = "manual"
     context_budget_tokens: int = 12000
 

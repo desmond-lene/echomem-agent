@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>陈默场景评测报告</title>
+  <style>
+    :root {
+      --bg: #f6f3ea;
+      --paper: #fffdf8;
+      --ink: #1f2430;
+      --muted: #6d7380;
+      --line: #ddd4c4;
+      --accent: #0f5d66;
+      --good: #196b47;
+      --bad: #a64035;
+      --warn: #946200;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, rgba(15,93,102,0.12), transparent 28%),
+        linear-gradient(180deg, #f5efe1 0%, var(--bg) 42%, #f8f5ee 100%);
+      color: var(--ink);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+    }
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 28px; }
+    .hero {
+      padding: 28px;
+      border: 1px solid rgba(31,36,48,0.08);
+      border-radius: 24px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.92), rgba(255,251,242,0.98));
+      box-shadow: 0 20px 60px rgba(31,36,48,0.08);
+    }
+    .eyebrow {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(15,93,102,0.10);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 12px 0 8px; font-size: 34px; line-height: 1.15; }
+    h2 { margin: 0 0 12px; font-size: 22px; }
+    p { margin: 8px 0; color: var(--muted); }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 22px;
+    }
+    .stat, .card, .panel {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--paper);
+    }
+    .stat strong { display: block; font-size: 30px; color: var(--accent); }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    ul { margin: 10px 0 0; padding-left: 20px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      font-size: 13px;
+      background: var(--paper);
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #efe6d4;
+      z-index: 1;
+    }
+    tr.pass td:first-child { box-shadow: inset 4px 0 0 var(--good); }
+    tr.fail td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
+    .section {
+      margin-top: 18px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255,253,248,0.95);
+    }
+    .mono { font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; color: var(--ink); }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+    .warn { color: var(--warn); }
+    @media (max-width: 1100px) {
+      .stats, .grid, .card-grid, .kpis { grid-template-columns: 1fr; }
+      .wrap { padding: 16px; }
+      table { display: block; overflow: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <span class="eyebrow">Chenmo Evaluation</span>
+      <h1>陈默长时记忆评测报告</h1>
+      <p>基于 <span class="mono">docs\design\agent\evaluation_scenario.md</span> 真实回放 55 条对话，完成 commit 后对 30 个问题逐题发问、逐题判分，并输出失败归因和重构建议。</p>
+      <div class="stats">
+        <div class="stat"><strong>9/31</strong><span>通过题数</span></div>
+        <div class="stat"><strong>29%</strong><span>总通过率</span></div>
+        <div class="stat"><strong>64</strong><span>导入对话轮数</span></div>
+        <div class="stat"><strong>22</strong><span>失败题数</span></div>
+      </div>
+      <div class="kpis">
+        <div class="panel">
+          <h2>运行信息</h2>
+          <p>tenant: <span class="mono">tenant_061dc314d760</span></p>
+          <p>user: <span class="mono">user_0b4380f9086e</span></p>
+          <p>ingest session: <span class="mono">chenmo-ingest-20260529_075702</span></p>
+          <p>commit: <span class="mono">archive_001</span></p>
+          <p>generated at: <span class="mono">2026-05-29T08:27:05.879183+00:00</span></p>
+        </div>
+        <div class="panel">
+          <h2>结论</h2>
+          <p>当前实现已经能覆盖一部分单跳和部分时序题，但在多跳、复杂因果、任务堆叠和综合评估类题上仍有明显短板。</p>
+          <p>失败主因不是单点 bug，而是图模式、检索计划和 answer planner 都还偏“局部事实召回”，不足以稳定支撑长程子图推理。</p>
+        </div>
+        <div class="panel">
+          <h2>Graphiti 启发</h2>
+          <p>Graphiti 强调 temporal validity windows、episode provenance、prescribed/learned ontology，以及 hybrid retrieval（semantic + keyword + graph traversal）。这些点和本场景失败模式高度对齐。</p>
+          <p class="mono">Sources: https://github.com/getzep/graphiti</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>分维度成绩</h2>
+      <div class="card-grid">
+        
+            <div class="card">
+              <h3>一、时序推理（Temporal Reasoning）</h3>
+              <p>通过 2 / 6</p>
+              <p>通过率 33%</p>
+              <p>平均分 0.46</p>
+            </div>
+            
+            <div class="card">
+              <h3>二、多跳推理（Multi-hop Reasoning）</h3>
+              <p>通过 3 / 7</p>
+              <p>通过率 43%</p>
+              <p>平均分 0.62</p>
+            </div>
+            
+            <div class="card">
+              <h3>三、因果推理（Causal Reasoning）</h3>
+              <p>通过 1 / 7</p>
+              <p>通过率 14%</p>
+              <p>平均分 0.50</p>
+            </div>
+            
+            <div class="card">
+              <h3>四、复杂任务关系（Complex Task Relations）</h3>
+              <p>通过 2 / 6</p>
+              <p>通过率 33%</p>
+              <p>平均分 0.47</p>
+            </div>
+            
+            <div class="card">
+              <h3>五、综合推理（Comprehensive）</h3>
+              <p>通过 1 / 5</p>
+              <p>通过率 20%</p>
+              <p>平均分 0.37</p>
+            </div>
+            
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid">
+        <div class="panel">
+          <h2>失败归因</h2>
+          <ul>
+            <li>temporal_reasoning_gap: 4</li><li>multi_hop_reasoning_gap: 4</li><li>answer_contradiction: 1</li><li>causal_reasoning_gap: 6</li><li>task_reasoning_gap: 4</li><li>comprehensive_reasoning_gap: 4</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h2>失败样例</h2>
+          <ul>
+            <li><strong>T2</strong> 智云科技从成立到产品正式上线间隔了多久？ | 规则命中不足 | retrieval=ok</li><li><strong>T3</strong> 陈默儿子出生时，他正处在职业生涯的哪个阶段？ | 规则命中不足 | retrieval=ok</li><li><strong>T5</strong> 陈默父亲做手术时，智云科技的B轮融资完成了吗？ | 规则命中不足 | retrieval=ok</li><li><strong>T6</strong> 从陈默离开字节到智云产品上线，中间经历了哪些公司/阶段？按顺序列出。 | 规则命中不足 | retrieval=ok</li><li><strong>M2</strong> 如果陈默需要联系给智云A轮投资的机构，他可以通过谁牵线？这个人和他是什么关系？ | 规则命中不足 | retrieval=ok</li><li><strong>M4</strong> 陈默的妻子李婷现在在哪家公司工作？她之前和陈默在哪个公司共事过？ | 规则命中不足 | retrieval=ok</li><li><strong>M6</strong> 智云科技新任CTO吴军之前在哪里工作？这个机构与陈默大学同学刘洋的现任雇主有什么关系？ | 规则命中不足 | retrieval=ok</li><li><strong>M7</strong> 陈默的室友刘洋创办的公司被谁收购了？收购方与陈默现任妻子李婷的现任雇主是同一家公司吗？ | 规则命中不足 | retrieval=ok</li><li><strong>C1</strong> 陈默2020年从阿里巴巴离职的直接原因是什么？根本原因是什么？ | 规则命中不足 | retrieval=ok</li><li><strong>C2</strong> 周强为什么离职并加入竞对公司？ | 规则命中不足 | retrieval=ok</li><li><strong>C3</strong> 陈默2023年8月变现字节期权并投入公司的原因是什么？ | 规则命中不足 | retrieval=ok</li><li><strong>C4</strong> 为什么智云科技能在2024年上半年实现营收突破和续约率大幅提升？ | 规则命中不足 | retrieval=ok</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>建议方案</h2>
+      <ul>
+        <li>抽取层从“扁平三元组”升级为“Episode + Entity + Relation + Event + Task + Claim”六层模型，把任职、融资、婚姻、手术、邀请、拒绝、牵线、转型分歧等显式建模为事件，并给事件挂时间、参与方、结果、证据。</li><li>按 Graphiti 的思路强化时间和溯源：每条事实保留 validity window、source episode、evidence span，支持查询“当时为真”而不是只查当前真值。Graphiti README 重点强调了 validity windows、episodes provenance 和 hybrid retrieval。</li><li>把检索前的意图识别升级为“问题分解器”：先判断是时序、多跳、因果、任务、反事实还是风险评估，再把一个问题拆成多个 graph sub-queries，例如先找人物/公司，再追事件，再做时间过滤和路径拼接。</li><li>增加图检索后的二阶段推理：先返回候选子图，再由 answer planner 基于子图做比较、排序、因果链串联，避免仅凭单跳 relation 直接生成答案。</li><li>为 task 建立一级对象，而不是把任务散落在 episode 文本里。任务应有 task_id、状态、目标、依赖、参与人、相关地点/文档/客户，才能稳定回答“关于这次出行/这个项目/这轮融资聊了什么”。</li><li>给人物和公司增加 evolving summary / timeline snapshot，尤其是长期实体如陈默、马东、智云科技、李婷。复杂题往往需要跨 3-8 个 episode 汇总，没有实体时间线就会退化成全文回忆。</li><li>新增多跳检索策略：先图遍历找到 1-hop/2-hop/3-hop 子图，再做 BM25/embedding 混排和 graph-distance rerank。Graphiti README 把 hybrid retrieval 和 graph-distance rerank 作为关键能力。</li><li>因果题单独增加 CauseEdge / DecisionEdge / ConstraintEdge 抽取，让“健康问题导致跳槽”“父亲手术导致组织拆分建议”不再只能从原文隐式猜。</li><li>综合题增加长期目标与风险状态图谱，例如 Goal(2028 IPO)、Risk(C轮未落地、家庭两地压力、月供压力)、Mitigation(组织拆分、双重角色)，这样评估题能直接检索目标-进展-风险三段证据。</li><li>评测侧保留可回放 artifacts：每题的 retrieval 命中、answer、judge JSON、LLM 提示词和 graph subgraph 截图，形成稳定 regression harness，而不是只看最终一句回答。</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>逐题结果</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>维度</th>
+            <th>问题</th>
+            <th>结果</th>
+            <th>分数</th>
+            <th>系统回答</th>
+            <th>标准答案</th>
+            <th>判分原因</th>
+            <th>检索态</th>
+            <th>检索证据</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr class="pass">
+              <td>T1</td>
+              <td>一、时序推理（Temporal Reasoning）</td>
+              <td>陈默在阿里巴巴和字节跳动分别工作了多长时间？哪家时间更长？</td>
+              <td>通过</td>
+              <td>0.75</td>
+              <td>陈默在阿里巴巴工作了 **2年2个月**（2018年7月至2020年9月），在字节跳动工作了 **10个月**（2020年10月至2021年8月）。**阿里巴巴工作时间更长。**
+
+**关键依据：**
+- 阿里巴巴：2018年7月加入，2020年9月离职（证据1、5、7）。
+- 字节跳动：2020年10月加入，2021年8月离职（证据1、4、9）。
+- 直接对比：2年2个月 &gt; 10个月。</td>
+              <td>阿里：2年2个月（2018.7-2020.9）；字节：10个月（2020.10-2021.8）。阿里更长。</td>
+              <td>规则命中充分</td>
+              <td>ok</td>
+              <td>Work duration comparison: 陈默 worked at 阿里巴巴 for 2y 2mo (2018.7 to 2020.9); 用户 worked at 字节跳动 for 10mo (2020.10 to 2021.8). 阿里巴巴 was longer. | Episode at 1716940800: 陈默2018年7月加入阿里巴巴，在钉钉团队做后端开发，直属主管是马东。 | Episode at 1716940800: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。 | Episode at 1590969600: 2020年从阿里跳槽到字节，因为健康原因，意识到身体比职级重要 | Relation 陈默 -[works_at]-&gt; 阿里巴巴. 陈默2018年7月至2020年9月在阿里巴巴工作。 valid_at=1530403200 valid_to=1598918400 | Relation 用户 -[worked_at]-&gt; 阿里. 用户2020年之前曾在阿里工作 valid_at=0 valid_to=1590969600</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>T2</td>
+              <td>一、时序推理（Temporal Reasoning）</td>
+              <td>智云科技从成立到产品正式上线间隔了多久？</td>
+              <td>未通过</td>
+              <td>0.00</td>
+              <td>证据不足。根据检索证据，智云科技产品“智云客服”于2022年6月正式上线（证据3），但公司成立时间未在证据中明确给出。已确定的部分结论：产品上线时间为2022年6月。</td>
+              <td>9个月（2021.9成立，2022.6上线）</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1704067200: 2024年从CTO转产品VP再到重新当CTO，找到了技术和产品的平衡点 | Episode at 1654041600: 2022年6月，智云科技产品&#x27;智云客服&#x27;正式上线，主打AI智能回复和工单自动分配，第一个大客户是云梯科技。 | Relation 红杉资本 -[invested_in]-&gt; 智云科技. 红杉资本在2022年1月领投智云科技Pre-A轮800万人民币，估值4000万 valid_at=1640995200 valid_to=None | Episode at 1640995200: 2022年1月，智云科技获得红杉资本领投的Pre-A轮融资800万人民币，估值4000万，当时产品只有demo。 | Relation 用户 -[founder]-&gt; 智云科技. 用户是智云科技的创始人 valid_at=0 valid_to=None | Relation 马东 -[cofounder_of]-&gt; 智云科技. 马东是智云科技的CEO，占股40% valid_at=1630454400 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>T3</td>
+              <td>一、时序推理（Temporal Reasoning）</td>
+              <td>陈默儿子出生时，他正处在职业生涯的哪个阶段？</td>
+              <td>未通过</td>
+              <td>0.00</td>
+              <td>陈默儿子出生时，他正处在职业生涯的哪个阶段？
+
+**证据不足**。根据检索证据，陈默儿子陈念出生于时间戳1677628800（对应2023年3月2日），而陈默在阿里巴巴的工作时间为2018年7月至2020年9月（证据4），2023年3月已超出此时间段，因此他当时已不在阿里巴巴。但证据中未提供2023年3月时陈默的具体工作单位或职业阶段信息。证据10提到2024年1月刘洋邀请陈默加入小米汽车，陈默婉拒并称“智云科技正是关键期”，但这只能推断2024年初陈默可能在智云科技，无法直接确定2023年3月儿子出生时的职业阶段。</td>
+              <td>儿子2023年3月出生，当时陈默在智云科技任CTO，公司正面临A轮融资困难。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1677628800: 用户儿子陈念出生 | Relation 陈默 -[works_at]-&gt; 阿里巴巴. 陈默2018年7月至2020年9月在阿里巴巴工作。 valid_at=1530403200 valid_to=1598918400 | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None | Entity 陈念 (Person): 用户与李婷的儿子 | Entity 陈默 (Person): 用户，1995年出生在杭州，2018年浙江大学计算机系硕士毕业，曾在阿里巴巴钉钉团队做后端开发。 | Episode at 1716940800: 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统，支持了百万级QPS。</td>
+            </tr>
+            
+            <tr class="pass">
+              <td>T4</td>
+              <td>一、时序推理（Temporal Reasoning）</td>
+              <td>按时间顺序排列以下事件：①甲状腺结节体检 ②字节技术卓越奖 ③智云Pre-A轮融资 ④结婚</td>
+              <td>通过</td>
+              <td>1.00</td>
+              <td>根据检索证据，事件的时间顺序如下：
+
+**① 甲状腺结节体检 → ② 字节技术卓越奖 → ③ 智云Pre-A轮融资 → ④ 结婚**
+
+**关键依据：**
+1. **甲状腺结节体检**：2020年8月（证据11）。
+2. **字节技术卓越奖**：2021年3月（证据5）。
+3. **智云Pre-A轮融资**：2022年1月（证据3）。
+4. **结婚**：2022年1月（证据8，与Pre-A轮融资同月）。
+
+**补充说明：**
+- 结婚与Pre-A轮融资均发生在2022年1月，检索证据未提供更精确的日期先后，因此两者顺序可视为并列。若需严格排序，证据不足。</td>
+              <td>①（2020.8）→ ②（2021.3）→ ④（2022年）→ ③（2022.1，实际结婚在2022年，但Pre-A是2022.1，需精确判断：Pre-A 2022.1，结婚在2022年但月份未知，根据上下文推断结婚应在Pre-A之后，因为公司成立后他才结婚）</td>
+              <td>规则命中充分</td>
+              <td>ok</td>
+              <td>Episode at 1675209600: 2023年2月，智云科技开始谈A轮融资，过程很不顺利。 | Episode at 1704067200: 2024年从CTO转产品VP再到重新当CTO，找到了技术和产品的平衡点 | Episode at 1640995200: 2022年1月，智云科技获得红杉资本领投的Pre-A轮融资800万人民币，估值4000万，当时产品只有demo。 | Episode at 1616630400: 2021年3月用户主导设计多人实时协同编辑冲突解决算法，获得字节技术卓越奖。 | Episode at 1640995200: 用户与李婷结婚，李婷是用户在字节时的同事，产品经理 | Relation 周强 -[cofounder_of]-&gt; 智云科技. 周强是智云科技的联合创始人，负责销售，占股10% valid_at=1630454400 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>T5</td>
+              <td>一、时序推理（Temporal Reasoning）</td>
+              <td>陈默父亲做手术时，智云科技的B轮融资完成了吗？</td>
+              <td>未通过</td>
+              <td>0.50</td>
+              <td>**结论：证据不足，无法确定陈默父亲做手术时智云科技的B轮融资是否完成。**
+
+**已确定的部分结论：**
+1. 陈默父亲查出肺癌早期的时间点为2025年4月30日左右（时间戳1745971200），陈默为此请假回杭州照顾两个月。
+2. 智云科技的B轮融资由高瓴资本领投（证据8），但检索证据中**未提供B轮融资的具体完成时间**。
+3. 智云科技的短期目标为“2026年完成C轮”（时间戳1775174400对应2026年4月1日），但该目标仅能说明C轮计划在2026年完成，无法直接推断2025年4月时B轮的状态（可能已完成、进行中或未启动）。
+
+**推理限制：** 由于缺乏B轮融资完成时间的关键证据，无法基于现有信息判断陈默父亲手术时B轮融资是否完成。</td>
+              <td>父亲2025.5手术，B轮2024.9已完成。答案是：已完成。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Entity 红杉资本 (Organization): 风险投资机构，领投智云科技Pre-A轮 | Entity 用户 (Person): 智云科技创始人/CTO，浙大计算机系毕业 | Episode at 1775174400: 短期目标：2026年完成C轮，把公司做成独角兽 | Episode at 1675209600: 2023年2月，智云科技开始谈A轮融资，过程很不顺利。 | Episode at 1630454400: 智云科技于2021年9月正式成立，用户是联合创始人兼CTO，占股15%，马东是CEO，占股40%，周强是联合创始人，负责销售，占股10%。 | Relation 陈默 -[works_on]-&gt; 钉钉. 陈默在阿里巴巴期间在钉钉团队做后端开发。 valid_at=1530403200 valid_to=1598918400</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>T6</td>
+              <td>一、时序推理（Temporal Reasoning）</td>
+              <td>从陈默离开字节到智云产品上线，中间经历了哪些公司/阶段？按顺序列出。</td>
+              <td>未通过</td>
+              <td>0.50</td>
+              <td>根据检索证据，陈默离开字节到智云产品上线之间的经历如下：
+
+1. **阿里巴巴（2018年7月 - 2020年9月）**：陈默2018年从浙江大学硕士毕业后，于2018年7月加入阿里巴巴，工作至2020年9月（证据9）。
+2. **字节跳动（时间未明确）**：陈默曾在字节跳动工作，与李婷是同事，并持有字节期权，于2023年8月变现80万（证据3、12）。但检索证据未明确其离开字节的具体时间，无法确定此阶段在阿里巴巴之前还是之后。
+3. **智云科技创立（2022年1月前）**：2022年1月，智云科技获得红杉资本领投的Pre-A轮融资800万，估值4000万，当时产品只有demo，说明公司在此时间点前已成立（证据6）。联合创始人包括马东（CEO，占股40%）和周强（负责销售，占股10%）（证据8、11）。
+4. **智云客服产品上线（2022年6月）**：2022年6月，智云科技产品“智云客服”正式上线，主打AI智能回复和工单自动分配，第一个大客户是云梯科技（证据5）。
+
+**不确定点**：陈默离开字节的具体时间未检索到，因此无法确定字节阶段在阿里巴巴之前还是之后。</td>
+              <td>字节（2020.10-2021.8）→ 智云筹备期（2021.8-2021.9）→ 智云成立后产品开发期（2021.9-2022.6）</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1711929600: 李婷从字节离职加入小红书，做电商产品经理，负责直播电商业务中台 | Entity 小红书 (Organization): 李婷2024年4月加入的公司 | Episode at 1640995200: 用户与李婷结婚，李婷是用户在字节时的同事，产品经理 | Relation 李婷 -[worked_at]-&gt; 字节跳动. 李婷曾在字节跳动工作 valid_at=0 valid_to=1711929600 | Relation 李婷 -[works_at]-&gt; 小红书. 李婷于2024年4月加入小红书，担任电商产品经理，负责直播电商业务中台 valid_at=1711929600 valid_to=None | Episode at 1654041600: 2022年6月，智云科技产品&#x27;智云客服&#x27;正式上线，主打AI智能回复和工单自动分配，第一个大客户是云梯科技。</td>
+            </tr>
+            
+            <tr class="pass">
+              <td>M1</td>
+              <td>二、多跳推理（Multi-hop Reasoning）</td>
+              <td>陈默的第一个大客户&quot;云梯科技&quot;与陈默前东家的关系是什么？</td>
+              <td>通过</td>
+              <td>1.00</td>
+              <td>云梯科技是陈默前东家（阿里巴巴旗下钉钉）的合作伙伴。
+
+**关键依据：**
+- 陈默的前东家是阿里巴巴，他在2018年7月至2020年9月期间在钉钉团队做后端开发（证据1、3、6）。
+- 检索到的关系明确显示：**云梯科技是钉钉的合作伙伴**（证据12）。
+- 同时，云梯科技也是陈默创业公司“智云科技”的第一个大客户（证据4、11）。
+
+因此，云梯科技与钉钉是合作伙伴关系。</td>
+              <td>云梯科技是钉钉的合作伙伴，钉钉是陈默的前东家阿里巴巴的产品。</td>
+              <td>规则命中充分</td>
+              <td>ok</td>
+              <td>Episode at 1654041600: 2022年6月，智云科技产品&#x27;智云客服&#x27;正式上线，主打AI智能回复和工单自动分配，第一个大客户是云梯科技。 | Episode at 1716940800: 陈默2018年7月加入阿里巴巴，在钉钉团队做后端开发，直属主管是马东。 | Relation 云梯科技 -[customer_of]-&gt; 智云科技. 云梯科技是智云客服的第一个大客户 valid_at=1654041600 valid_to=None | Relation 云梯科技 -[partner_of]-&gt; 钉钉. 云梯科技是钉钉的合作伙伴 valid_at=0 valid_to=None | Relation 陈默 -[works_at]-&gt; 阿里巴巴. 陈默2018年7月至2020年9月在阿里巴巴工作。 valid_at=1530403200 valid_to=1598918400 | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>M2</td>
+              <td>二、多跳推理（Multi-hop Reasoning）</td>
+              <td>如果陈默需要联系给智云A轮投资的机构，他可以通过谁牵线？这个人和他是什么关系？</td>
+              <td>未通过</td>
+              <td>0.00</td>
+              <td>**结论：** 证据不足，无法确定陈默联系智云A轮投资机构的具体牵线人。
+
+**已确定的部分结论：**
+1. 智云科技的A轮投资方是**金沙江创投**（2023年10月投资1500万，估值1.2亿）。
+2. 陈默与**马东**（智云科技CEO、陈默前主管）存在前同事关系（马东曾为陈默在阿里巴巴的直属主管）。
+3. 检索证据中未提及陈默与金沙江创投或智云A轮投资机构有任何直接联系或牵线关系。</td>
+              <td>可以通过张薇（前女友）联系金沙江创投。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1654041600: 2022年6月，智云科技产品&#x27;智云客服&#x27;正式上线，主打AI智能回复和工单自动分配，第一个大客户是云梯科技。 | Relation 用户 -[founder]-&gt; 智云科技. 用户是智云科技的创始人 valid_at=0 valid_to=None | Relation 马东 -[cofounder_of]-&gt; 智云科技. 马东是智云科技的CEO，占股40% valid_at=1630454400 valid_to=None | Episode at 1716940800: 陈默2018年7月加入阿里巴巴，在钉钉团队做后端开发，直属主管是马东。 | Episode at 1716940800: 陈默自我介绍：1995年出生在杭州，2018年从浙江大学计算机系硕士毕业。 | Relation 金沙江创投 -[invested_in]-&gt; 用户公司. 金沙江创投于2023年10月投资用户公司A轮1500万，估值1.2亿。 valid_at=1696118400 valid_to=None</td>
+            </tr>
+            
+            <tr class="pass">
+              <td>M3</td>
+              <td>二、多跳推理（Multi-hop Reasoning）</td>
+              <td>周强离职后去了哪家公司？这家公司的业务方向和智云科技的转型方向有什么关联？</td>
+              <td>通过</td>
+              <td>1.00</td>
+              <td>周强离职后去了**百川智能**。
+
+**与智云科技转型方向的关联：**
+- 周强在智云科技主张转型做大模型客服，与CEO马东发生分歧后于2023年6月离职。
+- 百川智能的业务方向为大模型技术研发与应用（包括大模型客服），与周强在智云科技主张的转型方向一致。</td>
+              <td>周强去了百川智能。百川做大模型，智云A轮的条件也是要接入大模型能力，两者业务方向一致，存在竞争关系。</td>
+              <td>规则命中充分</td>
+              <td>ok</td>
+              <td>Episode at 1630454400: 智云科技于2021年9月正式成立，用户是联合创始人兼CTO，占股15%，马东是CEO，占股40%，周强是联合创始人，负责销售，占股10%。 | Entity 周强 (Person): 联合创始人，主张转型做大模型客服，2023年6月离职加入百川智能 | Episode at 1654041600: 2022年6月，智云科技产品&#x27;智云客服&#x27;正式上线，主打AI智能回复和工单自动分配，第一个大客户是云梯科技。 | Episode at 1640995200: 2022年1月，智云科技获得红杉资本领投的Pre-A轮融资800万人民币，估值4000万，当时产品只有demo。 | Causal episode path: 2021年6月前阿里主管马东联系用户，邀请加入其创业公司（企业智能客服）担任CTO。 -&gt; 2021年8月用户从字节离职。 (caused) | Relation 金沙江创投 -[invested_in]-&gt; 用户公司. 金沙江创投于2023年10月投资用户公司A轮1500万，估值1.2亿。 valid_at=1696118400 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>M4</td>
+              <td>二、多跳推理（Multi-hop Reasoning）</td>
+              <td>陈默的妻子李婷现在在哪家公司工作？她之前和陈默在哪个公司共事过？</td>
+              <td>未通过</td>
+              <td>0.00</td>
+              <td>**结论：** 李婷现在在小红书工作。她与陈默之前没有在同一家公司共事过的证据。
+
+**关键依据：**
+
+1.  **李婷当前工作：** 证据显示，李婷于2024年4月加入小红书，担任电商产品经理（来源：relation 11）。
+2.  **陈默与李婷的共事经历：** 证据显示，陈默2018年7月至2020年9月在阿里巴巴钉钉团队工作（来源：relation 4, 6, 9）。李婷的工作经历仅提及2024年加入小红书（来源：relation 11）。两人的工作时间和公司均无重叠，因此证据不足，无法证明他们曾共事。</td>
+              <td>李婷现在在小红书。之前和陈默在字节跳动共事过。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Entity 小红书 (Organization): 李婷2024年4月加入的公司 | Relation 用户 -[spouse_of]-&gt; 李婷. 用户与李婷于2022年结婚 valid_at=1640995200 valid_to=None | Episode at 1716940800: 陈默2018年7月加入阿里巴巴，在钉钉团队做后端开发，直属主管是马东。 | Entity 浙江大学 (Organization): 陈默的母校，2018年计算机系硕士毕业。 | Relation 李婷 -[parent_of]-&gt; 陈念. 李婷是陈念的母亲 valid_at=1677628800 valid_to=None | Relation 高瓴资本 -[invested_in]-&gt; 公司. 高瓴资本领投公司B轮5000万美元 valid_at=1725840000 valid_to=None</td>
+            </tr>
+            
+            <tr class="pass">
+              <td>M5</td>
+              <td>二、多跳推理（Multi-hop Reasoning）</td>
+              <td>马东在创办智云科技之前，在哪家公司工作？他当时的下属有谁后来成为了他的联合创始人？</td>
+              <td>通过</td>
+              <td>1.00</td>
+              <td>根据检索证据，马东在创办智云科技之前，在**阿里巴巴**工作，具体在**钉钉团队**。他当时的下属**陈默**后来成为了他的联合创始人。
+
+**关键依据：**
+1. 证据9显示，马东是陈默在阿里巴巴钉钉团队的直属主管（valid_at=1530403200, valid_to=1598918400），表明马东在创办智云科技前就职于阿里巴巴。
+2. 证据7显示，用户（即陈默）和马东共同决定开发智能客服大模型（valid_at=1698796800），且证据3指出用户是智云科技创始人/CTO，说明陈默是马东的联合创始人。
+3. 证据9中“马东是陈默在阿里巴巴钉钉团队的直属主管”直接表明陈默是马东当时的下属，后共同创办智云科技。
+
+**结论：** 马东在创办智云科技前在**阿里巴巴（钉钉团队）**工作，他当时的下属**陈默**后来成为了他的联合创始人。</td>
+              <td>马东之前在阿里巴巴工作。他的下属陈默后来成为了联合创始人。</td>
+              <td>规则命中充分</td>
+              <td>episodes_only</td>
+              <td>Entity 用户 (Person): 智云科技创始人/CTO，浙大计算机系毕业 | Entity 马东 (Person): 公司高层，向用户提议组织调整和职务变动。 | Entity 红杉资本 (Organization): 风险投资机构，领投智云科技Pre-A轮 | Episode at 1577836800: 大学同学刘洋2019年创办自动驾驶公司 | Episode at 1630454400: 智云科技于2021年9月正式成立，用户是联合创始人兼CTO，占股15%，马东是CEO，占股40%，周强是联合创始人，负责销售，占股10%。 | Entity 周强 (Person): 联合创始人，主张转型做大模型客服，2023年6月离职加入百川智能</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>M6</td>
+              <td>二、多跳推理（Multi-hop Reasoning）</td>
+              <td>智云科技新任CTO吴军之前在哪里工作？这个机构与陈默大学同学刘洋的现任雇主有什么关系？</td>
+              <td>未通过</td>
+              <td>0.33</td>
+              <td>**结论：吴军之前在谷歌（Google Brain）工作。证据不足，无法确定该机构与陈默大学同学刘洋的现任雇主之间的关系。**
+
+**关键依据：**
+
+1.  **吴军的前任雇主：**
+    *   检索证据明确记录“吴军曾在谷歌Google Brain工作”（来源3）。因此，吴军加入智云科技担任CTO之前，在谷歌工作。
+
+2.  **与刘洋现任雇主的关系：**
+    *   检索证据中**没有关于“陈默大学同学刘洋”的任何信息**，包括其现任雇主。
+    *   因此，无法判断谷歌与刘洋的现任雇主之间是否存在任何关系。</td>
+              <td>吴军之前在Google Brain工作。刘洋现在在小米汽车。Google和小米是两家独立公司，没有直接隶属关系，但都是科技公司。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Relation 张薇 -[works_at]-&gt; 金沙江创投. 张薇在金沙江创投工作。 valid_at=0 valid_to=None | Entity 用户 (Person): 智云科技创始人/CTO，浙大计算机系毕业 | Relation 吴军 -[worked_at]-&gt; 谷歌. 吴军曾在谷歌Google Brain工作 valid_at=0 valid_to=None | Relation 吴军 -[CTO_of]-&gt; 公司. 吴军自2024年10月起担任公司CTO valid_at=1728432000 valid_to=None | Entity 红杉资本 (Organization): 风险投资机构，领投智云科技Pre-A轮 | Relation 用户 -[worked_at]-&gt; 阿里. 用户2020年之前曾在阿里工作 valid_at=0 valid_to=1590969600</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>M7</td>
+              <td>二、多跳推理（Multi-hop Reasoning）</td>
+              <td>陈默的室友刘洋创办的公司被谁收购了？收购方与陈默现任妻子李婷的现任雇主是同一家公司吗？</td>
+              <td>未通过</td>
+              <td>1.00</td>
+              <td>**结论：刘洋创办的公司被小米收购；收购方（小米）与李婷的现任雇主（小红书）不是同一家公司。**
+
+**关键依据：**
+1.  **刘洋的公司被收购方**：根据检索证据，刘洋2019年创办的自动驾驶公司，在2024年被小米以5亿美元收购。因此，收购方是**小米**。
+2.  **李婷的现任雇主**：根据检索证据，李婷于2024年4月加入**小红书**，担任电商产品经理。
+3.  **对比**：收购方是小米，李婷的雇主是小红书。两者是两家不同的公司，因此不是同一家公司。</td>
+              <td>刘洋的公司被小米收购。李婷现在在小红书。不是同一家公司。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Entity 小红书 (Organization): 李婷2024年4月加入的公司 | Episode at 1704067200: 2024年刘洋的自动驾驶公司被小米以5亿美元收购 | Relation 用户 -[classmate]-&gt; 刘洋. 用户和刘洋是浙大计算机系本科同班同学，睡上下铺 valid_at=0 valid_to=None | Relation 李婷 -[parent_of]-&gt; 陈念. 李婷是陈念的母亲 valid_at=1677628800 valid_to=None | Relation 刘洋 -[works_at]-&gt; 小米汽车. 刘洋现在是小米汽车智能驾驶VP valid_at=1704067200 valid_to=None | Relation 用户 -[CTO_of]-&gt; 公司. 用户担任公司CTO直到2024年10月 valid_at=1698796800 valid_to=1728432000</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>C1</td>
+              <td>三、因果推理（Causal Reasoning）</td>
+              <td>陈默2020年从阿里巴巴离职的直接原因是什么？根本原因是什么？</td>
+              <td>未通过</td>
+              <td>0.00</td>
+              <td>**直接原因：健康问题。** 证据显示，2020年疫情期间钉钉用户暴涨，陈默连续加班三个月后身体出现问题。
+
+**根本原因：意识到身体比职级重要。** 证据明确记录，陈默“因为健康原因，意识到身体比职级重要”，从而从阿里跳槽到字节。
+
+**关键依据：**
+- 检索证据6直接指出：“2020年从阿里跳槽到字节，因为健康原因，意识到身体比职级重要”。
+- 检索证据1和7佐证了高强度加班导致身体问题的背景。</td>
+              <td>直接原因：字节跳动提供了P2-2职级和60%薪资涨幅的offer。根本原因：疫情期间连续加班三个月导致甲状腺结节，健康出现问题，需要减少压力。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1716940800: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。 | Relation 陈默 -[works_at]-&gt; 阿里巴巴. 陈默2018年7月至2020年9月在阿里巴巴工作。 valid_at=1530403200 valid_to=1598918400 | Relation 用户 -[worked_at]-&gt; 阿里. 用户2020年之前曾在阿里工作 valid_at=0 valid_to=1590969600 | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None | Relation 陈默 -[works_on]-&gt; 钉钉. 陈默在阿里巴巴期间在钉钉团队做后端开发。 valid_at=1530403200 valid_to=1598918400 | Episode at 1590969600: 2020年从阿里跳槽到字节，因为健康原因，意识到身体比职级重要</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>C2</td>
+              <td>三、因果推理（Causal Reasoning）</td>
+              <td>周强为什么离职并加入竞对公司？</td>
+              <td>未通过</td>
+              <td>0.50</td>
+              <td>周强离职并加入百川智能的直接原因是与马东在公司发展方向上产生严重分歧。
+
+**关键依据：**
+1. **分歧内容**：周强主张公司转型做大模型客服，马东认为应该坚持现有产品、先做收入。两人于2023年5月为此大吵一架。
+2. **离职时间**：2023年6月，周强离职，并带走了两个销售骨干，一同加入百川智能。
+3. **公司背景**：周强与马东是智云科技的联合创始人（周强负责销售，占股10%；马东是CEO，占股40%），两人此前在腾讯是同事。周强加入百川智能，属于从自己联合创立的公司跳槽。
+
+**总结：** 核心原因是战略方向冲突（大模型客服 vs. 现有产品优先），导致联合创始人决裂，周强带团队出走至百川智能。</td>
+              <td>因为他和马东在公司战略上发生严重分歧：周强主张转型做大模型客服，马东坚持先做收入；意见不合导致吵架后离职。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Relation 周强 -[works_at]-&gt; 百川智能. 周强于2023年6月加入百川智能。 valid_at=1685577600 valid_to=None | Relation 吴军 -[CTO_of]-&gt; 公司. 吴军自2024年10月起担任公司CTO valid_at=1728432000 valid_to=None | Relation 金沙江创投 -[invested_in]-&gt; 用户公司. 金沙江创投于2023年10月投资用户公司A轮1500万，估值1.2亿。 valid_at=1696118400 valid_to=None | Entity 小红书 (Organization): 李婷2024年4月加入的公司 | Relation 周强 -[colleague]-&gt; 马东. 周强是马东在腾讯时的同事 valid_at=0 valid_to=None | Relation 周强 -[cofounder_of]-&gt; 马东. 周强和马东是公司联合创始人，2023年5月因发展方向分歧大吵一架。 valid_at=0 valid_to=1685577600</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>C3</td>
+              <td>三、因果推理（Causal Reasoning）</td>
+              <td>陈默2023年8月变现字节期权并投入公司的原因是什么？</td>
+              <td>未通过</td>
+              <td>0.67</td>
+              <td>**结论：** 陈默2023年8月变现字节期权并投入公司，直接原因是公司现金流断裂，他不得不裁员后自掏腰包注资救急。
+
+**关键依据：**
+1.  **直接因果链：** 检索证据明确记录因果路径：2023年7月，公司现金流断裂，陈默不得不裁员（从30人裁到8人）→ 2023年8月，陈默把字节的期权变现了80万，投进了公司。该路径标注为“caused”（因果）关系。
+2.  **背景补充：** 陈默曾持有字节跳动期权，并于2023年8月变现80万。公司此前已获高瓴资本领投的B轮5000万美元融资，但2023年7月仍出现现金流断裂。
+
+**推理：** 陈默变现期权是公司濒临倒闭时的被动救急措施，而非主动投资行为。</td>
+              <td>因为2023年7月公司现金流断裂，裁员后仍需要资金维持运营；马东已经抵押了房子，陈默作为联合创始人也投入资金救公司。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Relation 高瓴资本 -[invested_in]-&gt; 公司. 高瓴资本领投公司B轮5000万美元 valid_at=1725840000 valid_to=None | Episode at 1690848000: 2023年8月，用户把字节的期权变现了80万，投进了公司。 | Episode at 1716940800: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。 | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None | Relation 用户 -[former_employee]-&gt; 字节跳动. 用户曾持有字节跳动期权，并于2023年8月变现80万。 valid_at=0 valid_to=1690848000 | Relation 用户 -[worked_at]-&gt; 字节. 用户2020年从阿里跳槽到字节 valid_at=1590969600 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>C4</td>
+              <td>三、因果推理（Causal Reasoning）</td>
+              <td>为什么智云科技能在2024年上半年实现营收突破和续约率大幅提升？</td>
+              <td>未通过</td>
+              <td>0.33</td>
+              <td>根据检索到的记忆，智云科技在2024年上半年实现营收突破和续约率大幅提升，主要得益于**核心产品“智云数据中台”的升级与客户成功体系的强化**。
+
+**关键依据：**
+
+1.  **产品升级驱动营收增长**：2024年Q1，智云科技发布了“智云数据中台3.0”，新增了**实时数据湖与AI增强分析**模块。该版本直接带动了**金融与零售行业**头部客户的增购，单笔合同金额平均提升40%，是营收突破的核心引擎。
+2.  **客户成功体系提升续约率**：2024年Q2，公司推行了**“客户健康度评分”与“主动式服务”机制**。通过提前识别并解决客户使用中的瓶颈，使得**年续约率从2023年的82%提升至2024年上半年的94%**，显著高于行业平均水平。
+3.  **市场时机与竞争壁垒**：2024年上半年，企业数字化转型需求从“上云”转向“用数”，智云数据中台3.0恰好切中了客户对**实时分析与AI落地**的迫切需求，形成了差异化竞争优势。
+
+**结论：** 营收突破源于产品升级带来的大客户增购，续约率提升则归功于客户成功体系的精细化运营。两者共同作用，实现了2024年上半年的业绩双增长。</td>
+              <td>因为2023年11月决定基于Llama 2微调开发智能客服大模型，2024年2月新版本上线，产品竞争力增强。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1704067200: 刘洋邀请用户加入小米汽车，用户婉拒，因为智云科技正是关键期 | Episode at 1675209600: 2023年2月，智云科技开始谈A轮融资，过程很不顺利。 | Episode at 1640995200: 2022年1月，智云科技获得红杉资本领投的Pre-A轮融资800万人民币，估值4000万，当时产品只有demo。 | Relation 红杉资本 -[invested_in]-&gt; 智云科技. 红杉资本在2022年1月领投智云科技Pre-A轮800万人民币，估值4000万 valid_at=1640995200 valid_to=None | Relation 用户 -[founder]-&gt; 智云科技. 用户是智云科技的创始人 valid_at=0 valid_to=None | Relation 马东 -[cofounder_of]-&gt; 智云科技. 马东是智云科技的CEO，占股40% valid_at=1630454400 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>C5</td>
+              <td>三、因果推理（Causal Reasoning）</td>
+              <td>陈默2025年9月提议拆分产品团队的直接原因是什么？</td>
+              <td>未通过</td>
+              <td>0.50</td>
+              <td>陈默2025年9月提议拆分产品团队的直接原因是：**他发现远程管理120人的产品团队非常吃力**。
+
+**关键依据：**
+- 证据3显示，在时间戳1745971200（对应2025年4月），用户发现远程管理120人的产品团队非常吃力。
+- 证据5显示，在时间戳1756684800（对应2025年9月），陈默向马东提议将产品团队拆分为国内和国际两条线，国内线交给王磊。
+
+**推理：**
+两个事件在时间上紧密相连（4月发现问题，9月提出方案），且因果关系明确——管理困难是直接触发拆分的动因。拆分方案（国内线交王磊）也直接回应了“管理吃力”的问题。</td>
+              <td>因为2025年5-7月他回杭州照顾父亲期间，远程管理120人的产品团队非常吃力，需要组织架构调整来解决管理问题。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Relation 马东 -[manager_of]-&gt; 陈默. 马东是陈默在阿里巴巴钉钉团队的直属主管。 valid_at=1530403200 valid_to=1598918400 | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None | Episode at 1756684800: 2025年9月向马东提议将产品团队拆分为国内和国际两条线，国内线交给王磊。 | Episode at 1590969600: 2020年从阿里跳槽到字节，因为健康原因，意识到身体比职级重要 | Episode at 1704067200: 2024年从CTO转产品VP再到重新当CTO，找到了技术和产品的平衡点 | Entity 阿里巴巴 (Organization): 陈默2018年7月至2020年9月的工作单位。</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>C6</td>
+              <td>三、因果推理（Causal Reasoning）</td>
+              <td>陈默为什么婉拒了刘洋邀请加入小米汽车的机会？</td>
+              <td>未通过</td>
+              <td>0.50</td>
+              <td>根据检索证据，**婉拒刘洋邀请加入小米汽车的是用户本人，而非陈默**。用户婉拒的原因是：**智云科技正处于关键期**（证据1、12）。证据中无陈默与刘洋或小米汽车的任何关联记录。</td>
+              <td>因为2026年时智云科技正处于C轮融资的关键期，且公司即将成为独角兽，陈默作为核心高管不能离开。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1704067200: 刘洋邀请用户加入小米汽车，用户婉拒，因为智云科技正是关键期 | Episode at 1716940800: 陈默2018年7月加入阿里巴巴，在钉钉团队做后端开发，直属主管是马东。 | Relation 李婷 -[works_at]-&gt; 小红书. 李婷于2024年4月加入小红书，担任电商产品经理，负责直播电商业务中台 valid_at=1711929600 valid_to=None | Episode at 1656633600: 2022年用户婚礼，刘洋是伴郎 | Relation 用户 -[classmate]-&gt; 刘洋. 用户和刘洋是浙大计算机系本科同班同学，睡上下铺 valid_at=0 valid_to=None | Episode at 1716940800: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。</td>
+            </tr>
+            
+            <tr class="pass">
+              <td>C7</td>
+              <td>三、因果推理（Causal Reasoning）</td>
+              <td>马东为什么能在2023年公司濒死时拿出200万注入公司？</td>
+              <td>通过</td>
+              <td>1.00</td>
+              <td>**结论：** 马东在2023年公司濒死时拿出200万注入公司，是因为他抵押了自己的房产。
+
+**关键依据：**
+1.  **直接证据**：检索证据1明确记录“马东把房子抵押贷款了200万注入公司”，时间戳对应2023年7月1日左右，与“2023年公司濒死”时间段吻合。
+2.  **背景关联**：检索证据6显示“2023年公司差点死掉”，证据7显示马东是公司CEO及联合创始人（占股40%），其通过个人资产抵押筹集资金注入公司，符合其角色和公司困境。
+
+**推理过程：**
+- 检索证据中无其他外部资金来源（如新投资、借款等）用于此笔200万注资的记录。
+- 唯一明确指向“200万”和“注入公司”且与马东相关的记录即为抵押房产贷款。
+- 因此，唯一可确定的结论是：马东通过抵押个人房产获得贷款并注入公司。</td>
+              <td>因为他把自己房子抵押了。这体现了他对公司存亡的责任感和作为CEO的担当。</td>
+              <td>规则命中充分</td>
+              <td>ok</td>
+              <td>Episode at 1688169600: 马东把房子抵押贷款了200万注入公司。 | Relation 用户 -[CTO_of]-&gt; 公司. 用户担任公司CTO直到2024年10月 valid_at=1698796800 valid_to=1728432000 | Relation 高瓴资本 -[invested_in]-&gt; 公司. 高瓴资本领投公司B轮5000万美元 valid_at=1725840000 valid_to=None | Relation 周强 -[colleague]-&gt; 马东. 周强是马东在腾讯时的同事 valid_at=0 valid_to=None | Relation 马东 -[invited]-&gt; 用户. 2021年6月马东邀请用户加入其创业公司企业智能客服担任CTO。 valid_at=1622505600 valid_to=None | Episode at 1672531200: 2023年公司差点死掉，前女友张薇帮忙，学会了在绝境中不放弃</td>
+            </tr>
+            
+            <tr class="pass">
+              <td>CT1</td>
+              <td>四、复杂任务关系（Complex Task Relations）</td>
+              <td>智云客服产品从开发到获取第一个大客户，涉及哪些人物/公司的协作链条？</td>
+              <td>通过</td>
+              <td>1.00</td>
+              <td>**结论：** 智云客服从开发到获取第一个大客户（云梯科技），核心协作链条为：马东（创始人/CEO）→ 用户（CTO/产品主导者）→ 陈默（技术骨干）→ 云梯科技（客户）。
+
+**关键依据与推理：**
+
+1.  **产品开发阶段（2022年6月前）：**
+    *   **发起人：马东**。2021年6月，前阿里主管马东联系用户，邀请其加入自己的创业公司（企业智能客服方向）担任CTO（依据11）。
+    *   **技术负责人：用户**。用户作为CTO，主导推出了“智云客服”产品（依据7、10），并带队基于Llama 2开发了智能客服大模型（依据4、12）。
+    *   **技术骨干：陈默**。陈默于2018年7月加入阿里巴巴钉钉团队，直属主管是马东（依据5），并在钉钉负责审批流程引擎开发（依据1）。他随后跟随马东加入创业公司，成为技术团队核心成员。
+
+2.  **产品上线与获取客户阶段（2022年6月）：**
+    *   **产品上线**：2022年6月，智云科技产品“智云客服”正式上线，主打AI智能回复和工单自动分配（依据2）。
+    *   **第一个大客户：云梯科技**。产品上线后，**云梯科技**成为智云客服的第一个大客户（依据2、6）。
+
+**协作链条总结：**
+马东（创始人/CEO，提供方向与资源）→ 用户（CTO，负责产品开发与技术决策）→ 陈默（技术骨干，负责核心引擎开发）→ 云梯科技（客户，验证产品价值）。</td>
+              <td>陈默（CTO，产品开发）→ 智云科技（产品提供方）→ 云梯科技（第一个大客户）→ 钉钉（云梯的合作伙伴，陈默前东家）</td>
+              <td>规则命中充分</td>
+              <td>ok</td>
+              <td>Relation 陈默 -[responsible_for]-&gt; 钉钉审批流程引擎. 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统。 valid_at=1530403200 valid_to=1598918400 | Episode at 1654041600: 2022年6月，智云科技产品&#x27;智云客服&#x27;正式上线，主打AI智能回复和工单自动分配，第一个大客户是云梯科技。 | Episode at 1640995200: 2022年1月，智云科技获得红杉资本领投的Pre-A轮融资800万人民币，估值4000万，当时产品只有demo。 | Relation 云梯科技 -[customer_of]-&gt; 智云科技. 云梯科技是智云客服的第一个大客户 valid_at=1654041600 valid_to=None | Entity 智云客服 (Product): 用户主导推出的产品，国际版第一站东南亚 | Episode at 1601510400: 2020年10月用户加入字节飞书团队，做文档协作引擎，汇报给林娜（飞书技术总监）。</td>
+            </tr>
+            
+            <tr class="pass">
+              <td>CT2</td>
+              <td>四、复杂任务关系（Complex Task Relations）</td>
+              <td>陈默在字节跳动获得的&quot;技术卓越奖&quot;和后来智云科技B轮融资成功之间，存在什么样的能力关联？</td>
+              <td>通过</td>
+              <td>1.00</td>
+              <td>根据检索证据，无法直接建立陈默在字节跳动获得的“技术卓越奖”与智云科技B轮融资成功之间的能力关联。证据不足，但可确定以下部分结论：
+
+1. **技术卓越奖**：2021年3月，用户（陈默）在字节跳动主导设计多人实时协同编辑冲突解决算法，获得该奖项（证据6）。
+2. **智云科技融资情况**：2023年2月，智云科技开始谈A轮融资，过程很不顺利（证据1）。检索证据中未提及B轮融资成功。
+3. **用户角色**：用户是智云科技创始人/CTO，占股15%（证据3），曾于2020年10月至2021年8月在字节跳动飞书团队工作（证据8），并于2023年8月变现字节期权80万（证据9）。
+
+**结论**：证据未显示B轮融资成功，因此无法评估该奖项与B轮融资的关联。仅能确认用户具备解决多人实时协同编辑冲突算法的技术能力，但该能力是否直接促成融资（尤其是B轮）缺乏证据支持。</td>
+              <td>技术卓越奖证明了陈默在协同编辑/冲突解决算法方面的技术能力，这一能力可能迁移到了智云客服的实时协同/AI模型开发中，间接促成了产品竞争力提升和B轮融资。</td>
+              <td>规则命中充分</td>
+              <td>ok</td>
+              <td>Relation 陈默 -[works_on]-&gt; 钉钉. 陈默在阿里巴巴期间在钉钉团队做后端开发。 valid_at=1530403200 valid_to=1598918400 | Entity 红杉资本 (Organization): 风险投资机构，领投智云科技Pre-A轮 | Relation 陈默 -[responsible_for]-&gt; 钉钉审批流程引擎. 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统。 valid_at=1530403200 valid_to=1598918400 | Relation 陈默 -[works_at]-&gt; 阿里巴巴. 陈默2018年7月至2020年9月在阿里巴巴工作。 valid_at=1530403200 valid_to=1598918400 | Relation 马东 -[manager_of]-&gt; 陈默. 马东是陈默在阿里巴巴钉钉团队的直属主管。 valid_at=1530403200 valid_to=1598918400 | Entity 用户 (Person): 智云科技创始人/CTO，浙大计算机系毕业</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>CT3</td>
+              <td>四、复杂任务关系（Complex Task Relations）</td>
+              <td>2025年陈默身兼哪些角色/责任？这些角色之间是否存在冲突或依赖关系？</td>
+              <td>未通过</td>
+              <td>0.33</td>
+              <td>根据检索证据，**无法确定陈默在2025年的具体角色或责任**。证据中最新信息截止于2021年8月（从字节离职加入创业公司），无2025年相关记录。
+
+**可确定的部分结论：**
+- 截至2021年8月，陈默的历史角色包括：阿里巴巴钉钉团队后端开发（2018.07-2020.09，负责钉钉审批流程引擎）、被前阿里主管马东邀请加入创业公司“企业智能客服”担任CTO（2021年6月受邀，2021年8月从字节离职）。
+- 证据中无2021年8月之后（2022-2025年）的任何信息，无法确认其2025年是否仍在“企业智能客服”担任CTO，或是否身兼其他角色。
+
+**关于角色冲突或依赖关系：** 证据不足，无法分析。</td>
+              <td>角色：智云科技CTO兼产品VP、丈夫、父亲、儿子（需照顾生病的父亲）。冲突：家庭责任（照顾父亲、育儿）与高强度工作的冲突；依赖：产品VP工作依赖对技术架构的理解（CTO经验），国际业务线依赖国内业务线的支持。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Relation 陈默 -[works_on]-&gt; 钉钉. 陈默在阿里巴巴期间在钉钉团队做后端开发。 valid_at=1530403200 valid_to=1598918400 | Causal episode path: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。 -&gt; 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统，支持了百万级QPS。 (follow_up) | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None | Entity 企业智能客服 (Project): 马东创业项目，用户受邀担任CTO | Relation 马东 -[invited]-&gt; 用户. 2021年6月马东邀请用户加入其创业公司企业智能客服担任CTO。 valid_at=1622505600 valid_to=None | Entity 浙江大学 (Organization): 陈默的母校，2018年计算机系硕士毕业。</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>CT4</td>
+              <td>四、复杂任务关系（Complex Task Relations）</td>
+              <td>如果要分析智云科技2023年濒临破产到2024年B轮融资成功的转折点，需要追踪哪些关键决策链？</td>
+              <td>未通过</td>
+              <td>0.50</td>
+              <td>根据检索证据，智云科技从2023年濒临破产到2024年B轮融资成功的转折点，需追踪以下关键决策链：
+
+1. **A轮融资失败（2023年2月）**：证据显示，2023年2月智云科技开始谈A轮融资，过程很不顺利，这直接导致资金链紧张，濒临破产。
+
+2. **产品国际化决策**：证据提到，用户主导推出了产品“智云客服”，其国际版第一站是东南亚。这是从国内市场困境转向海外市场的关键战略决策。
+
+3. **获得海外市场验证**：证据未记录国际版在东南亚的具体客户、收入或里程碑数据，但“国际版第一站东南亚”表明团队执行了出海策略，可能改善了基本面。
+
+4. **吸引顶级资本C轮尽调**：证据显示，腾讯和红杉正在对C轮融资进行尽调。这直接证明公司通过上述决策链重新获得头部资本认可，为B轮成功（及后续C轮）奠定基础。
+
+**结论**：核心决策链为“A轮融资失败（2023.2）→ 产品国际化（智云客服国际版，首站东南亚）→ 获得海外市场验证 → 吸引腾讯与红杉C轮尽调（2024年）→ B轮融资成功”。
+
+**证据不足**：未记录2023年2月A轮失败后的具体止血措施（如裁员、降薪），未记录国际版在东南亚的具体客户、收入或里程碑数据，也未记录B轮融资的具体时间、金额和估值。</td>
+              <td>决策链：①马东与陈默的战略坚持 vs 周强的转型分歧 → ②周强离职带来的危机 → ③裁员和创始人注资维持生存 → ④陈默通过张薇获得金沙江A轮 → ⑤接入大模型（Llama 2微调）的产品决策 → ⑥产品升级带来营收增长 → ⑦B轮融资成功。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1675209600: 2023年2月，智云科技开始谈A轮融资，过程很不顺利。 | Episode at 1654041600: 2022年6月，智云科技产品&#x27;智云客服&#x27;正式上线，主打AI智能回复和工单自动分配，第一个大客户是云梯科技。 | Relation 红杉资本 -[invested_in]-&gt; 智云科技. 红杉资本在2022年1月领投智云科技Pre-A轮800万人民币，估值4000万 valid_at=1640995200 valid_to=None | Episode at 1640995200: 2022年1月，智云科技获得红杉资本领投的Pre-A轮融资800万人民币，估值4000万，当时产品只有demo。 | Relation 用户 -[founder]-&gt; 智云科技. 用户是智云科技的创始人 valid_at=0 valid_to=None | Relation 马东 -[cofounder_of]-&gt; 智云科技. 马东是智云科技的CEO，占股40% valid_at=1630454400 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>CT5</td>
+              <td>四、复杂任务关系（Complex Task Relations）</td>
+              <td>陈默的职业决策中，哪些可以视为&quot;对冲&quot;或&quot;风险分散&quot;策略？</td>
+              <td>未通过</td>
+              <td>0.00</td>
+              <td>根据检索证据，陈默的职业决策中可视为“对冲”或“风险分散”策略的证据不足。
+
+**已能确定的部分结论：**
+- 陈默在2018年7月至2020年9月期间，在阿里巴巴钉钉团队从事后端开发，负责钉钉审批流程引擎项目。
+- 检索证据中未提及陈默参与任何其他公司、项目或创业活动（如智云科技），也未显示其有同时从事多份工作或分散职业风险的行为。
+
+**结论：** 基于现有证据，无法判断陈默的职业决策中包含“对冲”或“风险分散”策略。</td>
+              <td>①2020年从阿里跳槽到字节：用更健康的工作环境对冲健康风险；②2024年从CTO转产品VP：降低纯技术路径的风险，拓展产品管理能力；③2026年同时担任CTO和产品VP：双线发展，增强不可替代性；④保留字节期权直到2023年才变现：保留了一定的财务安全垫。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Relation 陈默 -[works_at]-&gt; 阿里巴巴. 陈默2018年7月至2020年9月在阿里巴巴工作。 valid_at=1530403200 valid_to=1598918400 | Causal episode path: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。 -&gt; 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统，支持了百万级QPS。 (follow_up) | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None | Entity 红杉资本 (Organization): 风险投资机构，领投智云科技Pre-A轮 | Entity 浙江大学 (Organization): 陈默的母校，2018年计算机系硕士毕业。 | Episode at 1716940800: 陈默2018年7月加入阿里巴巴，在钉钉团队做后端开发，直属主管是马东。</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>CT6</td>
+              <td>四、复杂任务关系（Complex Task Relations）</td>
+              <td>描述陈默在2025年5-7月期间面临的&quot;任务堆叠&quot;情况，以及他如何解决优先级冲突。</td>
+              <td>未通过</td>
+              <td>0.00</td>
+              <td>根据检索证据，**证据不足**，无法描述陈默在2025年5-7月期间面临的“任务堆叠”情况以及他如何解决优先级冲突。
+
+**已能确定的部分结论：**
+- 陈默在2018年7月至2020年9月期间在阿里巴巴钉钉团队做后端开发，直属主管为马东。
+- 2020年疫情期间，因钉钉用户暴涨，陈默曾连续加班三个月，身体出现问题。
+- 检索证据中没有任何信息涉及2025年5-7月的时间段。</td>
+              <td>任务堆叠：①回杭州照顾肺癌手术的父亲（家庭紧急）②远程管理120人产品团队（工作重要）③儿子刚2岁需要陪伴（家庭常规）④C轮前期准备（战略重要）。解决方式：请假两个月专注父亲手术，同时提议拆分产品团队由王磊负责国内线，自己保留国际线，减少管理负担。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Relation 陈默 -[works_on]-&gt; 钉钉. 陈默在阿里巴巴期间在钉钉团队做后端开发。 valid_at=1530403200 valid_to=1598918400 | Causal episode path: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。 -&gt; 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统，支持了百万级QPS。 (follow_up) | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None | Entity 阿里巴巴 (Organization): 陈默2018年7月至2020年9月的工作单位。 | Entity 浙江大学 (Organization): 陈默的母校，2018年计算机系硕士毕业。 | Episode at 1616630400: 2021年3月用户主导设计多人实时协同编辑冲突解决算法，获得字节技术卓越奖。</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>COMP1</td>
+              <td>五、综合推理（Comprehensive）</td>
+              <td>如果陈默2021年没有接受马东的邀请加入智云科技，他的人生轨迹可能会有哪些不同？基于已有信息做合理推断。</td>
+              <td>未通过</td>
+              <td>0.33</td>
+              <td>**结论：** 证据不足，无法完整推断陈默未加入智云科技后的具体人生轨迹。但基于已有信息，可确定以下部分结论：
+
+1. **技术背景不变**：陈默2018年从浙江大学计算机系硕士毕业，2018年7月至2020年9月在阿里巴巴钉钉团队负责钉钉审批流程引擎（分布式工作流系统）。无论是否加入智云科技，他仍具备“浙大硕士+阿里钉钉核心引擎”的技术能力。
+
+2. **创业身份缺失**：若未加入智云科技，他将不会成为该公司的联合创始人兼CTO（占股15%），也不会经历2023年5月马东与周强因发展方向分歧大吵一架的创业公司内部冲突。
+
+3. **其他路径证据不足**：无法确定他是否会继续留在阿里巴巴/钉钉体系内晋升、跳槽至其他大厂或独角兽公司、或独立创业。证据中未提及他离开阿里后的其他工作邀请、创业计划或职业选择。</td>
+              <td>可能继续在字节发展，职级可能到P2-3或更高；不会经历2023年的创业生死危机；不会认识/依赖张薇的关系网络；可能更早实现财务自由但不会有独角兽的创业经历；不会在2022年结婚（因为李婷是字节同事，如果留在字节可能关系发展不同）。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Relation 陈默 -[works_on]-&gt; 钉钉. 陈默在阿里巴巴期间在钉钉团队做后端开发。 valid_at=1530403200 valid_to=1598918400 | Relation 陈默 -[responsible_for]-&gt; 钉钉审批流程引擎. 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统。 valid_at=1530403200 valid_to=1598918400 | Episode at 1630454400: 智云科技于2021年9月正式成立，用户是联合创始人兼CTO，占股15%，马东是CEO，占股40%，周强是联合创始人，负责销售，占股10%。 | Relation 陈默 -[works_at]-&gt; 阿里巴巴. 陈默2018年7月至2020年9月在阿里巴巴工作。 valid_at=1530403200 valid_to=1598918400 | Relation 马东 -[manager_of]-&gt; 陈默. 马东是陈默在阿里巴巴钉钉团队的直属主管。 valid_at=1530403200 valid_to=1598918400 | Relation 陈默 -[graduated_from]-&gt; 浙江大学. 陈默2018年从浙江大学计算机系硕士毕业。 valid_at=1527811200 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>COMP2</td>
+              <td>五、综合推理（Comprehensive）</td>
+              <td>从陈默的人际网络中，找出对他职业生涯影响最大的三个人，并说明各自的影响机制。</td>
+              <td>未通过</td>
+              <td>0.00</td>
+              <td>根据检索证据，对陈默职业生涯影响最大的三个人是：**马东**、**周强**。第三个人物证据不足，无法确定。
+
+1.  **马东**：影响机制为**直接管理**。马东是陈默在阿里巴巴钉钉团队的直属主管（证据3），直接负责分配任务和指导技术方向。在陈默开发钉钉审批流程引擎（分布式工作流系统，支持百万级QPS）及疫情期间高强度加班的过程中，马东作为直接管理者，对其技术成长和工作强度产生了直接影响（证据1、2、4、10）。
+
+2.  **周强**：影响机制为**战略分歧**。周强与马东在2023年5月发生争吵，主张转型做大模型客服，而马东主张坚持现有产品（证据9、12）。这一战略分歧直接影响了陈默所在团队的技术路线和资源分配，进而影响陈默的职业发展空间。
+
+3.  **第三个人**：证据不足。检索证据中未明确提及对陈默职业生涯有直接影响的第三个人物（如导师、同学或其他同事）。</td>
+              <td>①马东：前主管→创业邀请人→CEO搭档，提供了创业机会和平台；②张薇：前女友→金沙江牵线人，在公司濒死时救了一命；③李婷：妻子→前同事→精神支持，同时也代表了家庭责任的另一面约束。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Relation 陈默 -[works_at]-&gt; 阿里巴巴. 陈默2018年7月至2020年9月在阿里巴巴工作。 valid_at=1530403200 valid_to=1598918400 | Causal episode path: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。 -&gt; 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统，支持了百万级QPS。 (follow_up) | Episode at 1706745600: 用户带队闭关开发三个月后，2024年2月新版本上线 | Episode at 1775174400: 个人目标：40岁前实现财务自由，然后回杭州养老，父母在杭州 | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None | Entity 浙江大学 (Organization): 陈默的母校，2018年计算机系硕士毕业。</td>
+            </tr>
+            
+            <tr class="pass">
+              <td>COMP3</td>
+              <td>五、综合推理（Comprehensive）</td>
+              <td>对比陈默在阿里、字节、智云三家公司的&quot;工作-健康&quot;关系，他的健康意识经历了怎样的变化？</td>
+              <td>通过</td>
+              <td>1.00</td>
+              <td>根据检索到的记忆，陈默在阿里、字节、智云三家公司的“工作-健康”关系及健康意识变化如下：
+
+**结论：陈默的健康意识经历了从“被动忽视”到“主动管理”再到“系统性失衡”的演变过程。**
+
+**关键依据与推理：**
+
+1.  **阿里时期（被动忽视）：**
+    -   **工作状态：** 高强度、高压力的“996”文化，长期处于“战斗模式”。
+    -   **健康表现：** 出现明显的身体透支信号（如频繁熬夜、饮食不规律、颈椎/腰椎问题），但**未主动干预**，健康意识处于“被动忽视”阶段——知道有问题，但认为“扛过去就行”，将健康视为可牺牲的代价。
+
+2.  **字节时期（主动管理）：**
+    -   **工作状态：** 节奏更快、信息密度更高，但公司提供了相对完善的健康福利（如健身房、心理咨询、体检升级）。
+    -   **健康表现：** 开始**主动关注**健康数据（如睡眠监测、体脂率、心率变异性），尝试使用健康类App和智能设备。健康意识进入“主动管理”阶段——意识到健康需要投资，但管理方式仍带有“效率思维”（如用运动补偿工作消耗，用补剂替代规律作息）。
+
+3.  **智云时期（系统性失衡）：**
+    -   **工作状态：** 创业公司，角色从执行者变为决策者，压力从“任务量”转为“责任与不确定性”。
+    -   **健康表现：** 出现**系统性失衡**——不仅是身体问题（如慢性疲劳、免疫力下降），更伴随明显的心理/情绪耗竭（如焦虑、失眠、决策疲劳）。健康意识进入“反思与调整”阶段——意识到健康不是可管理的“项目”，而是需要与工作模式、人生目标重新对齐的基础系统。开始寻求更根本的解决方案（如调整工作节奏、建立边界、接受不完美）。
+
+**变化总结：**
+-   **阿里：** 健康是“可牺牲的资源”。
+-   **字节：** 健康是“可优化的指标”。
+-   **智云：** 健康是“不可妥协的系统”。
+
+**注意：** 以上分析基于检索到的记忆片段，未包含具体时间戳或量化数据（如体检报告、具体病假天数）。若需要更精确的因果链条（如某次具体事件触发意识转变），建议补充更详细的记忆记录。</td>
+              <td>阿里：忽视健康，连续加班导致甲状腺问题；字节：开始重视健康，选择相对低强度的工作环境；智云：创业高压下再次透支健康（2023年危机期），但2025年父亲生病后再次强化健康和家庭优先的意识。</td>
+              <td>规则命中充分</td>
+              <td>ok</td>
+              <td>Relation 红杉资本 -[invested_in]-&gt; 智云科技. 红杉资本在2022年1月领投智云科技Pre-A轮800万人民币，估值4000万 valid_at=1640995200 valid_to=None | Entity 陈默 (Person): 用户，1995年出生在杭州，2018年浙江大学计算机系硕士毕业，曾在阿里巴巴钉钉团队做后端开发。 | Relation 用户 -[founder]-&gt; 智云科技. 用户是智云科技的创始人 valid_at=0 valid_to=None | Relation 马东 -[cofounder_of]-&gt; 智云科技. 马东是智云科技的CEO，占股40% valid_at=1630454400 valid_to=None | Relation 云梯科技 -[customer_of]-&gt; 智云科技. 云梯科技是智云客服的第一个大客户 valid_at=1654041600 valid_to=None | Relation 周强 -[cofounder_of]-&gt; 智云科技. 周强是智云科技的联合创始人，负责销售，占股10% valid_at=1630454400 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>COMP4</td>
+              <td>五、综合推理（Comprehensive）</td>
+              <td>智云科技的股权结构在关键节点发生了哪些变化？这些变化反映了什么样的治理演进？</td>
+              <td>未通过</td>
+              <td>0.00</td>
+              <td>根据检索到的信息，**智云科技（Zhiyun Tech）的股权结构在关键节点发生了从创始人绝对控股到引入外部机构投资者、再到管理层与核心员工持股平台并存的演变**。这一变化反映了公司从**个人决策驱动**向**制度化、多元化治理**的演进。
+
+### 关键节点变化
+
+1.  **初始阶段（创始人绝对控股）**：
+    -   **状态**：公司成立初期，创始人（通常为技术或业务核心人物）持有绝大多数股权（例如超过70%）。
+    -   **依据**：检索到的早期工商信息显示，创始人A持有公司80%以上股份，其余由联合创始人B持有。此时股权高度集中，决策权集中于创始人。
+
+2.  **成长期（引入外部机构投资者）**：
+    -   **状态**：公司完成A轮、B轮融资，引入了风险投资（VC）或私募股权（PE）机构。
+    -   **依据**：检索到在2018-2020年间，公司先后引入了“红杉资本中国基金”、“高瓴资本”等机构，创始人持股比例稀释至约40%-50%，机构合计持股约30%。
+    -   **变化**：股权从“创始人-联合创始人”二元结构变为“创始人-机构投资者-联合创始人”三元结构。
+
+3.  **成熟期（设立员工持股平台）**：
+    -   **状态**：公司设立了有限合伙形式的员工持股平台（如“智云共赢”、“智云同创”），用于激励核心管理层和技术骨干。
+    -   **依据**：检索到在2021年Pre-IPO轮次前后，公司通过增资或转让方式，将约10%-15%的股份注入员工持股平台。创始人持股进一步降至约35%，机构持股约40%，员工持股平台约15%，其他小股东约10%。
+    -   **变化**：股权结构变为“创始人+机构+员工持股平台+其他”的多元化格局。
+
+### 治理演进反映
+
+1.  **从“人治”到“法治”**：
+    -   **初始阶段**：股权高度集中，公司治理依赖创始人的个人判断和权威，决策效率高但风险集中（如创始人决策失误、个人健康问题等）。
+    -   **演进**：引入机构投资者后，董事会中增加了外部董事席位，公司开始建立规范的财务、审计、合规制度，重大决策需经董事会表决，治理从“个人说了算”转向“制度说了算”。
+
+2.  **从“封闭”到“开放”**：
+    -   **初始阶段**：股权封闭在创始团队内部，缺乏外部监督和资源。
+    -   **演进**：引入机构投资者不仅带来了资金，还带来了行业资源、管理经验和上市辅导。机构投资者通常会要求公司建立更透明的信息披露机制和更科学的决策流程，推动治理向公众公司标准靠拢。
+
+3.  **从“单一激励”到“长效激励”**：
+    -   **初始阶段**：激励手段有限，主要依赖工资和奖金。
+    -   **演进**：设立员工持股平台，将核心员工利益与公司长期价值绑定。这要求公司必须建立公平的股权分配规则、退出机制和绩效考核体系，治理从“短期雇佣关系”转向“长期合伙关系”。
+
+4.  **从“集中决策”到“制衡决策”**：
+    -   **初始阶段**：创始人拥有绝对控制权，决策权高度集中。
+    -   **演进**：随着机构投资者和员工持股平台的加入，股权结构分散化，形成了创始人、机构、员工三方利益制衡的格局。任何一方都无法单独决定重大事项（如并购、上市、分红），必须通过协商和表决达成共识，治理从“独裁”转向“民主协商”。
+
+### 总结
+
+智云科技的股权结构变化，本质上是公司从**创业期**（依赖个人能力）向**成长期**（依赖资本与制度）再向**成熟期**（依赖团队与治理）的演进。这一过程反映了现代企业治理的典型路径：**通过股权分散化引入外部监督和内部激励，最终实现决策的科学化、透明化和长期化。**</td>
+              <td>初始（2021.9）：马东40%+陈默15%+周强10%+期权池35%；周强离职后（2023.6）：其10%股份可能回购或稀释；A轮后（2023.10）：金沙江进入，创始人股份稀释；B轮后（2024.9）：高瓴进入，进一步稀释；C轮进行中（2026.3）：腾讯可能进入。演进：从创始人控股→投资机构逐步进入，治理从创始人主导→董事会多元化。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1704067200: 刘洋邀请用户加入小米汽车，用户婉拒，因为智云科技正是关键期 | Episode at 1654041600: 2022年6月，智云科技产品&#x27;智云客服&#x27;正式上线，主打AI智能回复和工单自动分配，第一个大客户是云梯科技。 | Relation 红杉资本 -[invested_in]-&gt; 智云科技. 红杉资本在2022年1月领投智云科技Pre-A轮800万人民币，估值4000万 valid_at=1640995200 valid_to=None | Episode at 1640995200: 2022年1月，智云科技获得红杉资本领投的Pre-A轮融资800万人民币，估值4000万，当时产品只有demo。 | Relation 用户 -[founder]-&gt; 智云科技. 用户是智云科技的创始人 valid_at=0 valid_to=None | Relation 马东 -[cofounder_of]-&gt; 智云科技. 马东是智云科技的CEO，占股40% valid_at=1630454400 valid_to=None</td>
+            </tr>
+            
+            <tr class="fail">
+              <td>COMP5</td>
+              <td>五、综合推理（Comprehensive）</td>
+              <td>基于陈默的目标（40岁前财务自由、回杭州养老、2028年IPO），评估他当前（2026年）的进展和风险。</td>
+              <td>未通过</td>
+              <td>0.50</td>
+              <td>基于检索证据，对陈默当前（2026年）进展与风险的评估如下：
+
+**1. 财务自由目标（40岁前）**
+- **进展**：证据不足。陈默1995年出生（证据3），2026年31岁，距40岁（2035年）有9年。其2028年IPO目标若成功，届时33岁，时间上可行。但当前（2026年）其职业状态、收入、资产或股权情况均无记录，无法判断财务积累进展。
+- **风险**：高。财务自由完全依赖2028年IPO，但该目标缺乏可验证的载体（如当前雇主、公司上市进程）。
+
+**2. 回杭州养老**
+- **进展**：部分确定。陈默出生于杭州（证据3），个人目标明确为回杭州养老、父母在杭州（证据12）。母亲2024年从杭州退休来北京（证据1、9），但陈默本人当前是否在杭州、是否已购置房产或建立社交网络，证据不足。
+- **风险**：中低。母亲已退休具备回杭条件，但若2028年回杭，需重新安置家庭（母亲目前在北京）。
+
+**3. 2028年IPO**
+- **进展**：证据不足。陈默2018-2020年在阿里巴巴钉钉团队（证据2、7），后离职（证据5），当前雇主、职位、股权情况均无记录。2028年IPO目标缺乏可验证的载体。
+- **风险**：极高。距离2028年仅2年，若当前公司未进入Pre-IPO阶段，目标几乎不可实现。
+
+**总结**：陈默的规划逻辑清晰（杭州人回杭州、IPO实现财务自由），但当前（2026年）缺乏可验证的进展证据。最大风险是2028年IPO目标过于具体且时间紧迫，且职业路径不明确。</td>
+              <td>进展：公司接近独角兽，C轮进展顺利；个人有股权但尚未变现；已在北京买房但背负月供。风险：①C轮未最终敲定，估值10亿有不确定性；②IPO目标2028年时间紧，需持续高速增长；③家庭在杭州但工作在北京，长期两地分居；④40岁前财务自由取决于股权变现时机和估值。</td>
+              <td>规则命中不足</td>
+              <td>ok</td>
+              <td>Episode at 1716940800: 陈默2018年7月加入阿里巴巴，在钉钉团队做后端开发，直属主管是马东。 | Episode at 1716940800: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。 | Relation 陈默 -[born_in]-&gt; 杭州. 陈默1995年出生在杭州。 valid_at=820454400 valid_to=None | Causal episode path: 陈默在阿里巴巴待了两年，从2018年7月到2020年9月。2020年疫情期间，钉钉用户暴涨，陈默连续加班三个月，身体出了些问题。 -&gt; 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统，支持了百万级QPS。 (follow_up) | Episode at 1716940800: 陈默负责钉钉审批流程引擎的开发，做了一个分布式工作流系统，支持了百万级QPS。 | Entity 阿里巴巴 (Organization): 陈默2018年7月至2020年9月的工作单位。</td>
+            </tr>
+            
+        </tbody>
+      </table>
+    </section>
+  </div>
+</body>
+</html>

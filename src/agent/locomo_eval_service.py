@@ -217,6 +217,7 @@ class LocomoEvalService:
             "config": {
                 "user_id": str(payload.get("user_id") or "locomo-user"),
                 "agent_id": str(payload.get("agent_id") or "locomo-agent"),
+                "dry_run": bool(payload.get("dry_run", False)),
                 "commit_after_replay": bool(payload.get("commit_after_replay", True)),
                 "commit_wait_seconds": float(payload.get("commit_wait_seconds") or self.config.locomo.commit_wait_seconds),
                 "commit_poll_seconds": float(payload.get("commit_poll_seconds") or self.config.locomo.commit_poll_seconds),

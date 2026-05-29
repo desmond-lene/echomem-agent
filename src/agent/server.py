@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 from .chat_service import AgentChatService
 from .config import AgentConfig, load_config
 from .echomemory_client import EchoMemoryClientError
+from .graph_eval_service import GraphEvalService
 from .locomo_dataset import LocomoDatasetError, LocomoDatasetService
 from .locomo_eval_service import LocomoEvalError, LocomoEvalService
 from .model_client import ModelClientError
@@ -28,7 +29,7 @@ INDEX_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>EchoMemory 智能体对话</title>
+  <title>EchoMemory 閺呴缚鍏樻担鎾愁嚠鐠?/title>
   <style>
     :root {
       --ink: #182235;
@@ -348,6 +349,44 @@ INDEX_HTML = r"""<!doctype html>
       color: var(--ink);
       padding: 0 10px;
     }
+    .account-switcher button[disabled] {
+      cursor: not-allowed;
+      opacity: 0.58;
+    }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.38);
+      z-index: 50;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      width: min(100%, 420px);
+      padding: 18px;
+      border: 1px solid #dce3f1;
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    }
+    .modal-card h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+    }
+    .modal-card p {
+      margin: 0 0 12px;
+      color: #6c7587;
+      font-size: 13px;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+    }
     .identity-row label { color: #7a8495; }
     .identity-row input {
       min-height: 34px;
@@ -535,6 +574,26 @@ INDEX_HTML = r"""<!doctype html>
       font-size: 12px;
       font-weight: 800;
     }
+    .context-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 5px 9px;
+      border: 1px solid #e7eaf2;
+      border-radius: 999px;
+      background: #fff;
+      color: #465168;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .context-toggle input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: var(--blue);
+    }
     .commit-memory-detail {
       display: grid;
       gap: 8px;
@@ -669,7 +728,7 @@ INDEX_HTML = r"""<!doctype html>
       font-weight: 800;
     }
     .memory-highlight::before {
-      content: "EchoMemory 检索上下文";
+      content: "EchoMemory 濡偓缁鳖澀绗傛稉瀣瀮";
       display: block;
       margin-bottom: 6px;
       color: #315fbd;
@@ -764,19 +823,18 @@ INDEX_HTML = r"""<!doctype html>
 <body>
   <header>
     <div class="header-title">
-      <h1>EchoMemory 智能体对话</h1>
-      <div class="status" id="status">连接中...</div>
+      <h1>EchoMemory 閺呴缚鍏樻担鎾愁嚠鐠?/h1>
+      <div class="status" id="status">鏉╃偞甯存稉?..</div>
     </div>
     <div class="header-actions">
       <div class="account-switcher">
-        <span class="account-label">当前账户</span>
+        <span class="account-label">瑜版挸澧犵拹锔藉煕</span>
         <strong class="current-account" id="currentAccountLabel">local account</strong>
-        <select id="accountSelect" title="切换账户"></select>
-        <button id="createAccount">新建账户</button>
-        <button id="ensureAccount">查找/创建</button>
-        <button id="forgetAccount">移除</button>
+        <select id="accountSelect" title="閸掑洦宕茬拹锔藉煕"></select>
+        <button type="button" id="createAccount">閺傛澘缂?/button>
+        <button type="button" id="forgetAccount">缁夊娅?/button>
       </div>
-      <button id="refresh">刷新状态</button>
+      <button type="button" id="refresh">閸掗攱鏌婇悩鑸碘偓?/button>
     </div>
   </header>
   <main>
@@ -785,19 +843,20 @@ INDEX_HTML = r"""<!doctype html>
         <aside class="chat-nav">
           <div class="brand-row">
             <div class="brand-dot">E</div>
-            <div>Echo 智能体</div>
+            <div>Echo 閺呴缚鍏樻担?/div>
           </div>
-          <button class="nav-button primary" id="openSession">＋ 新对话</button>
+          <button class="nav-button primary" id="openSession">閿?閺傛澘顕拠?/button>
           <div class="nav-list">
-            <button class="nav-item active" id="chatNav">◇ 对话</button>
-            <button class="nav-item" id="memoryNav">◎ EchoMemory</button>
-            <button class="nav-item" id="locomoNav">◎ LoCoMo 评测</button>
+            <button class="nav-item active" id="chatNav">閳?鐎电鐦?/button>
+            <button class="nav-item" id="memoryNav">閳?EchoMemory</button>
+            <button class="nav-item" id="locomoNav">閳?LoCoMo 鐠囧嫭绁?/button>
+            <button class="nav-item" id="graphEvalNav">閳?Graph 鐠囧嫭绁?/button>
           </div>
-          <div class="nav-section-title">最近会话</div>
+          <div class="nav-section-title">閺堚偓鏉╂垳绱扮拠?/div>
           <div id="sessionList"></div>
           <div class="chat-nav-footer">
-            Alibaba / Qwen 已接入<br />
-            EchoMemory 写入与检索实时生效
+            Alibaba / Qwen 瀹稿弶甯撮崗?br />
+            EchoMemory 閸愭瑥鍙嗘稉搴㈩梾缁便垹鐤勯弮鍓佹晸閺?
           </div>
         </aside>
         <div class="chat-main" id="chatMain">
@@ -806,7 +865,7 @@ INDEX_HTML = r"""<!doctype html>
             <div class="chat-topbar">
               <div class="chat-title">
                 <span>EchoMemory Agent</span>
-                <span class="model-pill" id="modelBadge">模型加载中</span>
+                <span class="model-pill" id="modelBadge">濡€崇€烽崝鐘烘祰娑?/span>
               </div>
             </div>
             <div class="identity-row">
@@ -818,12 +877,12 @@ INDEX_HTML = r"""<!doctype html>
           <div class="chat-scroll" id="chatScroll">
             <div class="welcome" id="welcome">
               <div>
-                <h2>今天想聊点什么？</h2>
-                <p>发起一轮真实 Agent 对话，消息会写入 EchoMemory 并调用 Alibaba 模型。</p>
+                <h2>娴犲﹤銇夐幆瀹犱喊閻愰€涚矆娑斿牞绱?/h2>
+                <p>閸欐垼鎹ｆ稉鈧潪顔炬埂鐎?Agent 鐎电鐦介敍灞剧Х閹垯绱伴崘娆忓弳 EchoMemory 楠炴儼鐨熼悽?Alibaba 濡€崇€烽妴?/p>
                 <div class="quick-prompts">
-                  <button class="quickPrompt">帮我整理 D03 的提交方案</button>
-                  <button class="quickPrompt">总结当前会话中的关键记忆</button>
-                  <button class="quickPrompt">生成一个三步执行计划</button>
+                  <button class="quickPrompt">鐢喗鍨滈弫瀵告倞 D03 閻ㄥ嫭褰佹禍銈嗘煙濡?/button>
+                  <button class="quickPrompt">閹崵绮ㄨぐ鎾冲娴兼俺鐦芥稉顓犳畱閸忔娊鏁拋鏉跨箓</button>
+                  <button class="quickPrompt">閻㈢喐鍨氭稉鈧稉顏冪瑏濮濄儲澧界悰宀冾吀閸?/button>
                 </div>
               </div>
             </div>
@@ -832,24 +891,28 @@ INDEX_HTML = r"""<!doctype html>
           <div>
             <div class="composer-wrap">
               <div class="composer">
-                <textarea id="userText" placeholder="给 EchoMemory Agent 发送消息">帮我整理一下 D03 的提交方案</textarea>
+                <textarea id="userText" placeholder="缂?EchoMemory Agent 閸欐垿鈧焦绉烽幁?>鐢喗鍨滈弫瀵告倞娑撯偓娑?D03 閻ㄥ嫭褰佹禍銈嗘煙濡?/textarea>
                 <div class="composer-actions">
                   <div class="tool-row">
-                    <button class="chip-button" id="memoryChip">记忆检索</button>
-                    <select class="memory-test-select" id="memoryTestKind" title="选择记忆测试场景">
-                      <option value="all">全部类型记忆</option>
-                      <option value="profile">profile 用户画像</option>
-                      <option value="preference">preference 偏好</option>
-                      <option value="entity">entity 实体</option>
-                      <option value="event">event 事件</option>
-                      <option value="agent_case">agent_case 案例</option>
-                      <option value="pattern">pattern 模式</option>
-                      <option value="tool_experience">tool_experience 工具经验</option>
+                    <button class="chip-button" id="memoryChip">鐠佹澘绻傚Λ鈧槐?/button>
+                    <label class="context-toggle" title="閹貉冨煑濡€崇€锋稉濠佺瑓閺傚洦妲搁崥锕€瀵橀崥顐ョ箮閺堢喎顕拠?>
+                      <input id="includeHistory" type="checkbox" checked />
+                      Conversation Tail
+                    </label>
+                    <select class="memory-test-select" id="memoryTestKind" title="闁瀚ㄧ拋鏉跨箓濞村鐦崷鐑樻珯">
+                      <option value="all">閸忋劑鍎寸猾璇茬€风拋鏉跨箓</option>
+                      <option value="profile">profile 閻劍鍩涢悽璇插剼</option>
+                      <option value="preference">preference 閸嬪繐銈?/option>
+                      <option value="entity">entity 鐎圭偘缍?/option>
+                      <option value="event">event 娴滃娆?/option>
+                      <option value="agent_case">agent_case 濡楀牅绶?/option>
+                      <option value="pattern">pattern 濡€崇础</option>
+                      <option value="tool_experience">tool_experience 瀹搞儱鍙跨紒蹇涚崣</option>
                     </select>
-                    <button class="chip-button" id="memoryTestChip">记忆测试</button>
-                    <button class="chip-button" id="commitChip">提交归档</button>
+                    <button class="chip-button" id="memoryTestChip">鐠佹澘绻傚ù瀣槸</button>
+                    <button class="chip-button" id="commitChip">閹绘劒姘﹁ぐ鎺撱€?/button>
                   </div>
-                  <button class="send-button" id="sendChat" title="发送并生成">↑</button>
+                  <button class="send-button" id="sendChat" title="閸欐垿鈧礁鑻熼悽鐔稿灇">閳?/button>
                 </div>
               </div>
             </div>
@@ -859,21 +922,21 @@ INDEX_HTML = r"""<!doctype html>
             <div class="chat-topbar">
               <div class="chat-title">
                 <span>EchoMemory</span>
-                <span class="model-pill">记忆运行时</span>
+                <span class="model-pill">鐠佹澘绻傛潻鎰攽閺?/span>
               </div>
             </div>
             <div class="memory-page">
               <div class="memory-hero">
-                <h2>EchoMemory 状态</h2>
-                <p>这里聚合当前 Agent 使用的记忆配置、session 文件树、事件和最后一次接口响应。对话窗口只在「对话」页显示。</p>
+                <h2>EchoMemory 閻樿埖鈧?/h2>
+                <p>鏉╂瑩鍣烽懕姘値瑜版挸澧?Agent 娴ｈ法鏁ら惃鍕唶韫囧棝鍘ょ純顔衡偓涔籩ssion 閺傚洣娆㈤弽鎴欌偓浣风皑娴犺泛鎷伴張鈧崥搴濈濞嗏剝甯撮崣锝呮惙鎼存柣鈧倸顕拠婵堢崶閸欙絽褰ч崷銊ｂ偓灞筋嚠鐠囨縿鈧秹銆夐弰鍓с仛閵?/p>
               </div>
               <div class="memory-grid">
                 <div class="memory-card">
-                  <strong>当前会话</strong>
+                  <strong>瑜版挸澧犳导姘崇樈</strong>
                   <span id="memorySessionLabel">-</span>
                 </div>
                 <div class="memory-card">
-                  <strong>模型</strong>
+                  <strong>濡€崇€?/strong>
                   <span id="memoryModelLabel">-</span>
                 </div>
                 <div class="memory-card">
@@ -881,16 +944,16 @@ INDEX_HTML = r"""<!doctype html>
                   <span id="memoryTargetLabel">echo://sessions/-</span>
                 </div>
                 <div class="memory-card">
-                  <strong>归档状态</strong>
-                  <span id="commitStatusLabel">未提交</span>
+                  <strong>瑜版帗銆傞悩鑸碘偓?/strong>
+                  <span id="commitStatusLabel">閺堫亝褰佹禍?/span>
                 </div>
                 <div class="memory-card">
-                  <strong>操作</strong>
-                  <button class="chip-button" id="memoryRefresh">刷新 EchoMemory 信息</button>
+                  <strong>閹垮秳缍?/strong>
+                  <button class="chip-button" id="memoryRefresh">閸掗攱鏌?EchoMemory 娣団剝浼?/button>
                 </div>
               </div>
               <div class="commit-memory-detail" id="commitMemorySummary">
-                <div class="commit-memory-empty">完成提交后，这里会显示本次 commit 实际抽取的记忆类型和详情。</div>
+                <div class="commit-memory-empty">鐎瑰本鍨氶幓鎰唉閸氬函绱濇潻娆撳櫡娴兼碍妯夌粈鐑樻拱濞?commit 鐎圭偤妾幎钘夊絿閻ㄥ嫯顔囪箛鍡欒閸ㄥ鎷扮拠锔藉剰閵?/div>
               </div>
             </div>
           </div>
@@ -899,38 +962,38 @@ INDEX_HTML = r"""<!doctype html>
     </section>
     <section>
       <div class="panel-head">
-        <h2 id="sideTitle">上下文检查器</h2>
-        <span class="status" id="sideStatus">模型上下文</span>
+        <h2 id="sideTitle">娑撳﹣绗呴弬鍥梾閺屻儱娅?/h2>
+        <span class="status" id="sideStatus">濡€崇€锋稉濠佺瑓閺?/span>
       </div>
       <div class="panel-body inspect-grid">
         <div class="side-view active" id="contextPanel">
-          <label>组装后的模型上下文</label>
-          <div id="contextView" class="context-view">发送消息后，这里会显示本轮实际拼接并发送给模型的上下文。</div>
+          <label>缂佸嫯顥婇崥搴ｆ畱濡€崇€锋稉濠佺瑓閺?/label>
+          <div id="contextView" class="context-view">閸欐垿鈧焦绉烽幁顖氭倵閿涘矁绻栭柌灞肩窗閺勫墽銇氶張顒冪枂鐎圭偤妾幏鍏煎复楠炶泛褰傞柅浣虹舶濡€崇€烽惃鍕瑐娑撳鏋冮妴?/div>
         </div>
         <div class="side-view" id="memoryPanel">
-          <label>智能体配置</label>
+          <label>閺呴缚鍏樻担鎾诲帳缂?/label>
           <pre id="config">{}</pre>
           <label>EchoMemory Runtime</label>
           <pre id="runtime">{}</pre>
-          <label>文件系统目标</label>
+          <label>閺傚洣娆㈢化鑽ょ埠閻╊喗鐖?/label>
           <div class="fs-controls">
-            <label>目标 URI<input id="fsTarget" value="echo://sessions/chat-001" /></label>
-            <label>深度<input id="fsDepth" value="5" /></label>
+            <label>閻╊喗鐖?URI<input id="fsTarget" value="echo://sessions/chat-001" /></label>
+            <label>濞ｅ崬瀹?input id="fsDepth" value="5" /></label>
           </div>
           <div class="fs-actions">
-            <button id="treeMode">树状展开</button>
-            <button id="flatMode">平铺展开</button>
-            <button id="refreshTree">刷新目标</button>
-            <button id="treeEngineTarget">Tree 引擎</button>
+            <button id="treeMode">閺嶆垹濮哥仦鏇炵磻</button>
+            <button id="flatMode">楠炴娊鎽电仦鏇炵磻</button>
+            <button id="refreshTree">閸掗攱鏌婇惄顔界垼</button>
+            <button id="treeEngineTarget">Tree 瀵洘鎼?/button>
           </div>
           <div class="fs-view" id="tree"></div>
           <label>Selected File</label>
-          <pre id="fileContent">点击文件查看内容</pre>
+          <pre id="fileContent">閻愮懓鍤弬鍥︽閺屻儳婀呴崘鍛啇</pre>
           <label>Events</label>
           <pre id="events">{}</pre>
           <label>Commit Memory Details</label>
           <div class="commit-memory-detail" id="commitMemoryDetails">
-            <div class="commit-memory-empty">暂无 commit 记忆详情。</div>
+            <div class="commit-memory-empty">閺嗗倹妫?commit 鐠佹澘绻傜拠锔藉剰閵?/div>
           </div>
           <label>Last Response</label>
           <pre id="last">{}</pre>
@@ -938,6 +1001,17 @@ INDEX_HTML = r"""<!doctype html>
       </div>
     </section>
   </main>
+  <div class="modal-backdrop" id="accountPromptModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="accountPromptTitle">
+      <h3 id="accountPromptTitle">閺傛澘缂?/h3>
+      <p>鏉堟挸鍙嗘稉鈧稉顏冪┒娴滃氦鐦戦崚顐ゆ畱鐠愶附鍩涢崥宥囆為妴?/p>
+      <label>鐠愶附鍩涢崥宥囆?input id="accountPromptInput" autocomplete="off" /></label>
+      <div class="modal-actions">
+        <button type="button" id="accountPromptCancel">閸欐牗绉?/button>
+        <button type="button" id="accountPromptConfirm">绾喖鐣?/button>
+      </div>
+    </div>
+  </div>
   <script>
     const $ = (id) => document.getElementById(id);
     let currentTree = {uri: "", entries: []};
@@ -949,21 +1023,21 @@ INDEX_HTML = r"""<!doctype html>
     let activeAccount = null;
     let accountRevision = 0;
     const memoryTestScenarios = {
-      profile: ["我是后端工程师，长期负责 EchoMemory 记忆系统的后端架构、会话归档和记忆抽取链路。"],
-      preference: ["我喜欢你以后默认先给结论，再给简洁步骤；如果需要展开，再补充关键原因和验证方式。"],
-      entity: ["EchoMemory 项目里的 TreeMemoryEngine 是结构化长期记忆引擎，负责在 session commit 后读取会话归档，并生成 profile、preference、entity、event、case、pattern 和 tool 相关记忆。"],
-      event: ["今天决定把 EchoMemory 的召回优化放到下一阶段；本阶段优先完成 TreeMemoryEngine 的 commit 抽取验证，确认 event 类型可以从会话归档生成。"],
-      agent_case: ["这个任务遇到的问题是 commit 后页面只显示没有抽取记忆；原因是测试句子信息太弱且当前运行的是 tree 引擎；解决办法是把测试对话改成包含明确上下文、原因和结果的高质量样例；结果是 commit 摘要能显示本轮抽取出的记忆类型。"],
-      pattern: ["每次修改公开接口或记忆抽取规则后，固定流程是先补充针对性的单元测试，再跑相关测试套件，最后重启服务并用页面上的记忆测试确认 commit 结果。"],
-      tool_experience: ["[ToolCall] rg -n \"本次 commit 没有抽取出长期记忆|memory_kinds\" src e:/echomem-workspace/echomemory\n工具经验：使用 rg 定位记忆抽取问题时，先查精确提示文案和关键字段；如果路径范围太大导致结果噪声高，就收窄到 src/agent/server.py、text_processor.py 和 session_service.py。"],
+      profile: ["閹存垶妲搁崥搴ｎ伂瀹搞儳鈻肩敮鍫礉闂€鎸庢埂鐠愮喕鐭?EchoMemory 鐠佹澘绻傜化鑽ょ埠閻ㄥ嫬鎮楃粩顖涚仸閺嬪嫨鈧椒绱扮拠婵嗙秺濡楋絽鎷扮拋鏉跨箓閹惰棄褰囬柧鎹愮熅閵?],
+      preference: ["閹存垵鏋╁▎顫稑娴犮儱鎮楁妯款吇閸忓牏绮扮紒鎾诡啈閿涘苯鍟€缂佹瑧鐣濆ú浣诡劄妤犮倧绱辨俊鍌涚亯闂団偓鐟曚礁鐫嶅鈧敍灞藉晙鐞涖儱鍘栭崗鎶芥暛閸樼喎娲滈崪宀勭崣鐠囦焦鏌熷蹇嬧偓?],
+      entity: ["EchoMemory 妞ゅ湱娲伴柌宀€娈?TreeMemoryEngine 閺勵垳绮ㄩ弸鍕闂€鎸庢埂鐠佹澘绻傚鏇熸惛閿涘矁绀嬬拹锝呮躬 session commit 閸氬氦顕伴崣鏍︾窗鐠囨繂缍婂锝忕礉楠炲墎鏁撻幋?profile閵嗕垢reference閵嗕躬ntity閵嗕躬vent閵嗕恭ase閵嗕垢attern 閸?tool 閻╃鍙х拋鏉跨箓閵?],
+      event: ["娴犲﹤銇夐崘鍐茬暰閹?EchoMemory 閻ㄥ嫬褰崶鐐扮喘閸栨牗鏂侀崚棰佺瑓娑撯偓闂冭埖顔岄敍娑欐拱闂冭埖顔屾导妯哄帥鐎瑰本鍨?TreeMemoryEngine 閻?commit 閹惰棄褰囨宀冪槈閿涘瞼鈥樼拋?event 缁鐎烽崣顖欎簰娴犲簼绱扮拠婵嗙秺濡楋絿鏁撻幋鎰┾偓?],
+      agent_case: ["鏉╂瑤閲滄禒璇插闁洤鍩岄惃鍕６妫版ɑ妲?commit 閸氬酣銆夐棃銏犲涧閺勫墽銇氬▽鈩冩箒閹惰棄褰囩拋鏉跨箓閿涙稑甯崶鐘虫Ц濞村鐦崣銉ョ摍娣団剝浼呮径顏勬€ユ稉鏂跨秼閸撳秷绻嶇悰宀€娈戦弰?tree 瀵洘鎼搁敍娑溞掗崘鍐插濞夋洘妲搁幎濠冪ゴ鐠囨洖顕拠婵囨暭閹存劕瀵橀崥顐ｆ绾喕绗傛稉瀣瀮閵嗕礁甯崶鐘叉嫲缂佹挻鐏夐惃鍕彯鐠愩劑鍣洪弽铚傜伐閿涙稓绮ㄩ弸婊勬Ц commit 閹芥顩﹂懗鑺ユ▔缁€鐑樻拱鏉烆喗濞婇崣鏍у毉閻ㄥ嫯顔囪箛鍡欒閸ㄥ鈧?],
+      pattern: ["濮ｅ繑顐兼穱顔芥暭閸忣剙绱戦幒銉ュ經閹存牞顔囪箛鍡樺▕閸欐牞顫夐崚娆忔倵閿涘苯娴愮€规碍绁︾粙瀣Ц閸忓牐藟閸忓懘鎷＄€佃鈧呮畱閸楁洖鍘撳ù瀣槸閿涘苯鍟€鐠烘垹娴夐崗铏ゴ鐠囨洖顨滄禒璁圭礉閺堚偓閸氬酣鍣搁崥顖涙箛閸斺€宠嫙閻劑銆夐棃顫瑐閻ㄥ嫯顔囪箛鍡樼ゴ鐠囨洜鈥樼拋?commit 缂佹挻鐏夐妴?],
+      tool_experience: ["[ToolCall] rg -n \"閺堫剚顐?commit 濞屸剝婀侀幎钘夊絿閸戞椽鏆遍張鐔活唶韫囧敗memory_kinds\" src e:/echomem-workspace/echomemory\n瀹搞儱鍙跨紒蹇涚崣閿涙矮濞囬悽?rg 鐎规矮缍呯拋鏉跨箓閹惰棄褰囬梻顕€顣介弮璁圭礉閸忓牊鐓＄划鍓р€橀幓鎰仛閺傚洦顢嶉崪灞藉彠闁款喖鐡у▓纰夌幢婵″倹鐏夌捄顖氱窞閼煎啫娲挎径顏勩亣鐎佃壈鍤х紒鎾寸亯閸ｎ亜锛愭姗堢礉鐏忚鲸鏁圭粣鍕煂 src/agent/server.py閵嗕辜ext_processor.py 閸?session_service.py閵?],
       all: [
-        "我是后端工程师，长期负责 EchoMemory 记忆系统的后端架构、会话归档和记忆抽取链路。",
-        "我喜欢你以后默认先给结论，再给简洁步骤；如果需要展开，再补充关键原因和验证方式。",
-        "EchoMemory 项目里的 TreeMemoryEngine 是结构化长期记忆引擎，负责在 session commit 后读取会话归档，并生成 profile、preference、entity、event、case、pattern 和 tool 相关记忆。",
-        "今天决定把 EchoMemory 的召回优化放到下一阶段；本阶段优先完成 TreeMemoryEngine 的 commit 抽取验证，确认 event 类型可以从会话归档生成。",
-        "这个任务遇到的问题是 commit 后页面只显示没有抽取记忆；原因是测试句子信息太弱且当前运行的是 tree 引擎；解决办法是把测试对话改成包含明确上下文、原因和结果的高质量样例；结果是 commit 摘要能显示本轮抽取出的记忆类型。",
-        "每次修改公开接口或记忆抽取规则后，固定流程是先补充针对性的单元测试，再跑相关测试套件，最后重启服务并用页面上的记忆测试确认 commit 结果。",
-        "[ToolCall] rg -n \"本次 commit 没有抽取出长期记忆|memory_kinds\" src e:/echomem-workspace/echomemory\n工具经验：使用 rg 定位记忆抽取问题时，先查精确提示文案和关键字段；如果路径范围太大导致结果噪声高，就收窄到 src/agent/server.py、text_processor.py 和 session_service.py。"
+        "閹存垶妲搁崥搴ｎ伂瀹搞儳鈻肩敮鍫礉闂€鎸庢埂鐠愮喕鐭?EchoMemory 鐠佹澘绻傜化鑽ょ埠閻ㄥ嫬鎮楃粩顖涚仸閺嬪嫨鈧椒绱扮拠婵嗙秺濡楋絽鎷扮拋鏉跨箓閹惰棄褰囬柧鎹愮熅閵?,
+        "閹存垵鏋╁▎顫稑娴犮儱鎮楁妯款吇閸忓牏绮扮紒鎾诡啈閿涘苯鍟€缂佹瑧鐣濆ú浣诡劄妤犮倧绱辨俊鍌涚亯闂団偓鐟曚礁鐫嶅鈧敍灞藉晙鐞涖儱鍘栭崗鎶芥暛閸樼喎娲滈崪宀勭崣鐠囦焦鏌熷蹇嬧偓?,
+        "EchoMemory 妞ゅ湱娲伴柌宀€娈?TreeMemoryEngine 閺勵垳绮ㄩ弸鍕闂€鎸庢埂鐠佹澘绻傚鏇熸惛閿涘矁绀嬬拹锝呮躬 session commit 閸氬氦顕伴崣鏍︾窗鐠囨繂缍婂锝忕礉楠炲墎鏁撻幋?profile閵嗕垢reference閵嗕躬ntity閵嗕躬vent閵嗕恭ase閵嗕垢attern 閸?tool 閻╃鍙х拋鏉跨箓閵?,
+        "娴犲﹤銇夐崘鍐茬暰閹?EchoMemory 閻ㄥ嫬褰崶鐐扮喘閸栨牗鏂侀崚棰佺瑓娑撯偓闂冭埖顔岄敍娑欐拱闂冭埖顔屾导妯哄帥鐎瑰本鍨?TreeMemoryEngine 閻?commit 閹惰棄褰囨宀冪槈閿涘瞼鈥樼拋?event 缁鐎烽崣顖欎簰娴犲簼绱扮拠婵嗙秺濡楋絿鏁撻幋鎰┾偓?,
+        "鏉╂瑤閲滄禒璇插闁洤鍩岄惃鍕６妫版ɑ妲?commit 閸氬酣銆夐棃銏犲涧閺勫墽銇氬▽鈩冩箒閹惰棄褰囩拋鏉跨箓閿涙稑甯崶鐘虫Ц濞村鐦崣銉ョ摍娣団剝浼呮径顏勬€ユ稉鏂跨秼閸撳秷绻嶇悰宀€娈戦弰?tree 瀵洘鎼搁敍娑溞掗崘鍐插濞夋洘妲搁幎濠冪ゴ鐠囨洖顕拠婵囨暭閹存劕瀵橀崥顐ｆ绾喕绗傛稉瀣瀮閵嗕礁甯崶鐘叉嫲缂佹挻鐏夐惃鍕彯鐠愩劑鍣洪弽铚傜伐閿涙稓绮ㄩ弸婊勬Ц commit 閹芥顩﹂懗鑺ユ▔缁€鐑樻拱鏉烆喗濞婇崣鏍у毉閻ㄥ嫯顔囪箛鍡欒閸ㄥ鈧?,
+        "濮ｅ繑顐兼穱顔芥暭閸忣剙绱戦幒銉ュ經閹存牞顔囪箛鍡樺▕閸欐牞顫夐崚娆忔倵閿涘苯娴愮€规碍绁︾粙瀣Ц閸忓牐藟閸忓懘鎷＄€佃鈧呮畱閸楁洖鍘撳ù瀣槸閿涘苯鍟€鐠烘垹娴夐崗铏ゴ鐠囨洖顨滄禒璁圭礉閺堚偓閸氬酣鍣搁崥顖涙箛閸斺€宠嫙閻劑銆夐棃顫瑐閻ㄥ嫯顔囪箛鍡樼ゴ鐠囨洜鈥樼拋?commit 缂佹挻鐏夐妴?,
+        "[ToolCall] rg -n \"閺堫剚顐?commit 濞屸剝婀侀幎钘夊絿閸戞椽鏆遍張鐔活唶韫囧敗memory_kinds\" src e:/echomem-workspace/echomemory\n瀹搞儱鍙跨紒蹇涚崣閿涙矮濞囬悽?rg 鐎规矮缍呯拋鏉跨箓閹惰棄褰囬梻顕€顣介弮璁圭礉閸忓牊鐓＄划鍓р€橀幓鎰仛閺傚洦顢嶉崪灞藉彠闁款喖鐡у▓纰夌幢婵″倹鐏夌捄顖氱窞閼煎啫娲挎径顏勩亣鐎佃壈鍤х紒鎾寸亯閸ｎ亜锛愭姗堢礉鐏忚鲸鏁圭粣鍕煂 src/agent/server.py閵嗕辜ext_processor.py 閸?session_service.py閵?
       ]
     };
     const sessionStoreKey = "echomem-agent.sessions.v1";
@@ -1028,6 +1102,34 @@ INDEX_HTML = r"""<!doctype html>
       }
       $("currentAccountLabel").textContent = activeAccount?.label || "local account";
       $("userId").value = activeAccount?.id || "local";
+      updateAccountActions();
+    }
+    function updateAccountActions() {
+      const isLocalAccount = !activeAccount || activeAccount.id === "local";
+      $("forgetAccount").disabled = isLocalAccount;
+      $("forgetAccount").title = isLocalAccount ? "local account 娑撳秷鍏樼粔濠氭珟" : "缁夊娅庤ぐ鎾冲鐠愶附鍩?;
+    }
+    let accountPromptResolver = null;
+    function closeAccountPrompt(value) {
+      const resolver = accountPromptResolver;
+      accountPromptResolver = null;
+      $("accountPromptModal").classList.remove("open");
+      $("accountPromptModal").setAttribute("aria-hidden", "true");
+      $("accountPromptInput").value = "";
+      if (resolver) resolver(value);
+    }
+    function openAccountPrompt(title, defaultValue) {
+      $("accountPromptTitle").textContent = title;
+      $("accountPromptInput").value = defaultValue;
+      $("accountPromptModal").classList.add("open");
+      $("accountPromptModal").setAttribute("aria-hidden", "false");
+      return new Promise((resolve) => {
+        accountPromptResolver = resolve;
+        queueMicrotask(() => {
+          $("accountPromptInput").focus();
+          $("accountPromptInput").select();
+        });
+      });
     }
     async function accountRequest(path, payload) {
       const response = await fetch(path, {
@@ -1039,6 +1141,14 @@ INDEX_HTML = r"""<!doctype html>
       show("last", data);
       if (!response.ok || data.error) throw new Error(data.message || data.error || response.statusText);
       return data;
+    }
+    function isInvalidAuthKeyError(data) {
+      const message = `${data?.message || ""} ${data?.error || ""}`;
+      return message.includes("invalid X-Auth-Key") || message.includes("echomemory_http_401");
+    }
+    async function refreshActiveAccount() {
+      if (!activeAccount || activeAccount.id === "local") throw new Error("current account has no refreshable auth key");
+      await ensureNamedAccount(activeAccount.label || "locomo", {activate: true});
     }
     function switchAccount(accountId) {
       accountRevision += 1;
@@ -1056,16 +1166,17 @@ INDEX_HTML = r"""<!doctype html>
       activeSession = null;
       lastCommitMemorySummary = null;
       $("messages").innerHTML = "";
-      $("contextView").textContent = "切换账户后，将只显示当前账户下的会话上下文。";
+      $("contextView").textContent = "閸掑洦宕茬拹锔藉煕閸氬函绱濈亸鍡楀涧閺勫墽銇氳ぐ鎾冲鐠愶附鍩涙稉瀣畱娴兼俺鐦芥稉濠佺瑓閺傚洢鈧?;
       $("tree").innerHTML = "";
-      $("fileContent").textContent = "点击文件查看内容";
+      $("fileContent").textContent = "閻愮懓鍤弬鍥︽閺屻儳婀呴崘鍛啇";
       show("events", {});
       renderCommitMemoryDetails(null);
       renderSessions();
     }
     async function createAccount() {
-      const label = (prompt("新账户名称", `account ${accounts.filter((item) => item.id !== "local").length + 1}`) || "").trim();
+      const label = (await openAccountPrompt("閺傛澘缂?, `account ${accounts.filter((item) => item.id !== "local").length + 1}`) || "").trim();
       if (!label) return;
+      $("status").textContent = `濮濓絽婀弬鏉跨紦鐠愶附鍩?${label}...`;
       $("createAccount").disabled = true;
       try {
         const data = await accountRequest("/agent/accounts/create", {label});
@@ -1084,6 +1195,7 @@ INDEX_HTML = r"""<!doctype html>
         clearAccountView();
         renderAccounts();
         resetConversation();
+        $("status").textContent = `瀹稿弶鏌婂鍝勮嫙閸掑洦宕查崚鎷屽閹?${activeAccount.label || activeAccount.id}`;
         show("last", {account: label, status: "created"});
       } finally {
         $("createAccount").disabled = false;
@@ -1121,7 +1233,11 @@ INDEX_HTML = r"""<!doctype html>
       }
     }
     async function forgetAccount() {
-      if (!activeAccount || activeAccount.id === "local") return;
+      if (!activeAccount) return;
+      if (activeAccount.id === "local") {
+        show("last", {warning: "local account 娑撳秷鍏樼粔濠氭珟閿涘矁顕崗鍫濆瀼閹广垹鍩岄崗鏈电铂鐠愶附鍩涢妴?});
+        return;
+      }
       const removedAccount = activeAccount;
       $("forgetAccount").disabled = true;
       try {
@@ -1131,12 +1247,16 @@ INDEX_HTML = r"""<!doctype html>
           // Local removal should still work if EchoMemory is temporarily unavailable.
         }
         try {
-          await accountRequest("/agent/accounts/forget", {id: removedAccount.id, label: removedAccount.label});
+          if (removedAccount.id !== "local") {
+            await accountRequest("/agent/accounts/forget", {id: removedAccount.id, label: removedAccount.label});
+          }
         } catch {
           // Registry cleanup is best-effort; the local account list is the source for this page.
         }
-        accounts = accounts.filter((item) => item.id !== removedAccount.id);
         localStorage.removeItem(`${sessionStoreKey}.${removedAccount.id}`);
+        accounts = removedAccount.id === "local"
+          ? [{id: "local", label: "local account", authKey: ""}, ...accounts.filter((item) => item.id !== "local")]
+          : accounts.filter((item) => item.id !== removedAccount.id);
         activeAccount = accounts[0] || {id: "local", label: "local account", authKey: ""};
         accountRevision += 1;
         saveAccounts();
@@ -1192,7 +1312,7 @@ INDEX_HTML = r"""<!doctype html>
     function createConversation() {
       activeSession = {
         id: createSessionId(),
-        title: "新对话",
+        title: "閺傛澘顕拠?,
         messages: [],
         context: [],
         contextTrace: null,
@@ -1232,7 +1352,7 @@ INDEX_HTML = r"""<!doctype html>
       if (sessions.length === 0) {
         const empty = document.createElement("div");
         empty.className = "recent-chat";
-        empty.innerHTML = `<span class="recent-title">暂无会话</span>`;
+        empty.innerHTML = `<span class="recent-title">閺嗗倹妫ゆ导姘崇樈</span>`;
         list.appendChild(empty);
         return;
       }
@@ -1241,7 +1361,7 @@ INDEX_HTML = r"""<!doctype html>
         row.className = `recent-chat ${activeSession?.id === session.id ? "active" : ""}`;
         row.innerHTML = `
           <span class="recent-title">${escapeHtml(session.title || session.id)}</span>
-          <button class="delete-session" title="删除会话">×</button>
+          <button class="delete-session" title="閸掔娀娅庢导姘崇樈">鑴?/button>
         `;
         row.onclick = () => setActiveSession(session);
         row.querySelector(".delete-session").onclick = (event) => {
@@ -1257,7 +1377,7 @@ INDEX_HTML = r"""<!doctype html>
       $("welcome").style.display = items.length === 0 ? "grid" : "none";
       for (const item of items) bubble(item.role, item.content, {persist: false});
       if (activeSession?.context?.length) showContext(activeSession.context, activeSession.contextTrace);
-      else $("contextView").textContent = "发送消息后，这里会显示本轮实际拼接并发送给模型的上下文。";
+      else $("contextView").textContent = "閸欐垿鈧焦绉烽幁顖氭倵閿涘矁绻栭柌灞肩窗閺勫墽銇氶張顒冪枂鐎圭偤妾幏鍏煎复楠炶泛褰傞柅浣虹舶濡€崇€烽惃鍕瑐娑撳鏋冮妴?;
     }
     function rememberMessage(role, content) {
       rememberMessageFor(sessionId(), role, content);
@@ -1301,16 +1421,16 @@ INDEX_HTML = r"""<!doctype html>
       const grouped = new Set();
       const rows = [];
       for (const layer of layers) {
-        if (layer.name !== "近期对话" || !Array.isArray(layer.message_indexes) || layer.message_indexes.length <= 1) continue;
+        if (layer.name !== "鏉╂垶婀＄€电鐦? || !Array.isArray(layer.message_indexes) || layer.message_indexes.length <= 1) continue;
         for (const index of layer.message_indexes) grouped.add(index);
         rows.push({
-          title: `#${layer.message_indexes[0] + 1}-${layer.message_indexes[layer.message_indexes.length - 1] + 1} 近期对话`,
+          title: `#${layer.message_indexes[0] + 1}-${layer.message_indexes[layer.message_indexes.length - 1] + 1} 鏉╂垶婀＄€电鐦絗,
           role: "conversation",
           layer,
           content: layer.message_indexes.map((index) => {
             const message = messages[index] || {};
-            const speaker = message.role === "assistant" ? "助手" : "用户";
-            return `【${speaker}】\n${message.content || ""}`;
+            const speaker = message.role === "assistant" ? "閸斺晜澧? : "閻劍鍩?;
+            return `閵?{speaker}閵嗘叚n${message.content || ""}`;
           }).join("\n\n")
         });
       }
@@ -1332,11 +1452,11 @@ INDEX_HTML = r"""<!doctype html>
       return match ? Number(match[1]) - 1 : 0;
     }
     function roleLabel(role) {
-      if (role === "system") return "系统";
-      if (role === "user") return "用户";
-      if (role === "assistant") return "助手";
-      if (role === "tool") return "工具";
-      return role || "消息";
+      if (role === "system") return "缁崵绮?;
+      if (role === "user") return "閻劍鍩?;
+      if (role === "assistant") return "閸斺晜澧?;
+      if (role === "tool") return "瀹搞儱鍙?;
+      return role || "濞戝牊浼?;
     }
     function contextLayerFor(index, trace) {
       const layers = Array.isArray(trace?.layers) ? trace.layers : [];
@@ -1360,7 +1480,7 @@ INDEX_HTML = r"""<!doctype html>
       createConversation();
       $("messages").innerHTML = "";
       $("welcome").style.display = "grid";
-      $("contextView").textContent = "新对话已创建。发送消息后，这里会显示本轮实际拼接并发送给模型的上下文。";
+      $("contextView").textContent = "閺傛澘顕拠婵嗗嚒閸掓稑缂撻妴鍌氬絺闁焦绉烽幁顖氭倵閿涘矁绻栭柌灞肩窗閺勫墽銇氶張顒冪枂鐎圭偤妾幏鍏煎复楠炶泛褰傞柅浣虹舶濡€崇€烽惃鍕瑐娑撳鏋冮妴?;
       syncFsTarget(true);
     }
     function bubble(role, text, options = {}) {
@@ -1395,8 +1515,8 @@ INDEX_HTML = r"""<!doctype html>
       $("memoryMainView").classList.toggle("active", isMemory);
       $("chatNav").classList.toggle("active", !isMemory);
       $("memoryNav").classList.toggle("active", isMemory);
-      $("sideTitle").textContent = isMemory ? "EchoMemory" : "上下文检查器";
-      $("sideStatus").textContent = isMemory ? "记忆与调试信息" : "模型上下文";
+      $("sideTitle").textContent = isMemory ? "EchoMemory" : "娑撳﹣绗呴弬鍥梾閺屻儱娅?;
+      $("sideStatus").textContent = isMemory ? "鐠佹澘绻傛稉搴ょ殶鐠囨洑淇婇幁? : "濡€崇€锋稉濠佺瑓閺?;
       if (isMemory) refreshInspectors();
     }
     function depthFor(entry) {
@@ -1408,7 +1528,7 @@ INDEX_HTML = r"""<!doctype html>
       const container = $("tree");
       container.innerHTML = "";
       if (!entries || entries.length === 0) {
-        container.innerHTML = `<div class="fs-empty">目标下暂无内容</div>`;
+        container.innerHTML = `<div class="fs-empty">閻╊喗鐖ｆ稉瀣畯閺冪姴鍞寸€?/div>`;
         return;
       }
       const rows = fsMode === "flat" ? entries : entries.slice().sort((a, b) => a.uri.localeCompare(b.uri));
@@ -1419,11 +1539,11 @@ INDEX_HTML = r"""<!doctype html>
         const mark = entry.kind === "directory" ? "[D]" : "[F]";
         row.innerHTML = `
           <div class="fs-name" style="padding-left:${indent}px">${mark} ${escapeHtml(fsMode === "flat" ? entry.uri : entry.name)}</div>
-          <div class="fs-meta">${entry.kind}${entry.kind === "file" ? " · " + entry.size + "B" : ""}</div>
+          <div class="fs-meta">${entry.kind}${entry.kind === "file" ? " 璺?" + entry.size + "B" : ""}</div>
         `;
         if (entry.kind === "file") {
           row.onclick = () => readFile(entry.uri);
-          row.title = "点击读取文件";
+          row.title = "閻愮懓鍤拠璇插絿閺傚洣娆?;
         }
         container.appendChild(row);
       }
@@ -1461,14 +1581,17 @@ INDEX_HTML = r"""<!doctype html>
     }
     async function request(path, options = {}) {
       const revision = accountRevision;
+      const retriedAuth = Boolean(options.retriedAuth);
+      const fetchOptions = {...options};
+      delete fetchOptions.retriedAuth;
       let response;
       try {
         response = await fetch(path, {
           headers: authHeaders({"Content-Type": "application/json"}),
-          ...options
+          ...fetchOptions
         });
       } catch (error) {
-        throw new Error(`无法连接 Agent 服务：${error.message}`);
+        throw new Error(`閺冪姵纭舵潻鐐村复 Agent 閺堝秴濮熼敍?{error.message}`);
       }
       const text = await response.text();
       let data = {};
@@ -1478,13 +1601,17 @@ INDEX_HTML = r"""<!doctype html>
         data = {error: "invalid_json_response", message: text || response.statusText};
       }
       if (isCurrentAccount(revision)) show("last", data);
+      if (!response.ok && isCurrentAccount(revision) && isInvalidAuthKeyError(data) && !retriedAuth) {
+        await refreshActiveAccount();
+        return request(path, {...fetchOptions, retriedAuth: true});
+      }
       if (!response.ok) throw new Error(data.message || data.error || response.statusText);
       if (isCurrentAccount(revision)) await refreshInspectors();
       return data;
     }
     async function waitCommit(sessionIdForCommit, archiveId) {
       const revision = accountRevision;
-      for (let attempt = 0; attempt < 240; attempt += 1) {
+      for (let attempt = 0; attempt < 1200; attempt += 1) {
         const response = await fetch(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commits/${encodeURIComponent(archiveId)}`, {
           headers: authHeaders()
         });
@@ -1494,14 +1621,14 @@ INDEX_HTML = r"""<!doctype html>
         if (!response.ok || data.error) throw new Error(data.message || data.error || `commit status ${response.status}`);
         const statusValue = data.status?.status || "processing";
         if (statusValue === "completed") {
-          setCommitStatus(`归档完成：${archiveId}`, data);
+          setCommitStatus(`瑜版帗銆傜€瑰本鍨氶敍?{archiveId}`, data);
           return data.status;
         }
         if (statusValue === "failed") {
-          setCommitStatus(`归档失败：${archiveId}`, data);
+          setCommitStatus(`瑜版帗銆傛径杈Е閿?{archiveId}`, data);
           throw new Error(data.status.error || "commit failed");
         }
-        setCommitStatus(`归档处理中：${archiveId}（${statusValue}）`, data);
+        setCommitStatus(`瑜版帗銆傛径鍕倞娑擃叏绱?{archiveId}閿?{statusValue}閿涘ˇ, data);
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
       throw new Error(`commit timeout: ${archiveId}`);
@@ -1518,9 +1645,9 @@ INDEX_HTML = r"""<!doctype html>
     }
     function formatCommitMemories(summary) {
       const kinds = Array.isArray(summary.memory_kinds) ? summary.memory_kinds : [];
-      if (kinds.length === 0) return "本次 commit 没有抽取出长期记忆。";
+      if (kinds.length === 0) return "閺堫剚顐?commit 濞屸剝婀侀幎钘夊絿閸戞椽鏆遍張鐔活唶韫囧棎鈧?;
       const count = Array.isArray(summary.memories) ? summary.memories.length : 0;
-      return `本次 commit 抽取了 ${count} 条记忆，类型：${kinds.join(", ")}`;
+      return `閺堫剚顐?commit 閹惰棄褰囨禍?${count} 閺壜ゎ唶韫囧棴绱濈猾璇茬€烽敍?{kinds.join(", ")}`;
     }
     function renderCommitMemoryDetails(summary) {
       lastCommitMemorySummary = summary;
@@ -1529,10 +1656,10 @@ INDEX_HTML = r"""<!doctype html>
       $("commitMemoryDetails").innerHTML = html;
     }
     function commitMemoryHtml(summary) {
-      if (!summary) return `<div class="commit-memory-empty">暂无 commit 记忆详情。</div>`;
+      if (!summary) return `<div class="commit-memory-empty">閺嗗倹妫?commit 鐠佹澘绻傜拠锔藉剰閵?/div>`;
       const kinds = Array.isArray(summary.memory_kinds) ? summary.memory_kinds : [];
       const memories = Array.isArray(summary.memories) ? summary.memories : [];
-      if (kinds.length === 0) return `<div class="commit-memory-empty">本次 commit 没有抽取出长期记忆。</div>`;
+      if (kinds.length === 0) return `<div class="commit-memory-empty">閺堫剚顐?commit 濞屸剝婀侀幎钘夊絿閸戞椽鏆遍張鐔活唶韫囧棎鈧?/div>`;
       const tags = kinds.map((kind) => `<span class="commit-memory-tag">${escapeHtml(kind)}</span>`).join("");
       const items = memories.map((memory) => `
         <div class="commit-memory-item">
@@ -1553,13 +1680,13 @@ INDEX_HTML = r"""<!doctype html>
         const config = await fetch("/agent/config").then((r) => r.json());
         if (!isCurrentAccount(revision)) return;
         show("config", config);
-        $("modelBadge").textContent = `${config.model?.provider || "模型"} / ${config.model?.model || "未知"}`;
-        $("memoryModelLabel").textContent = `${config.model?.provider || "模型"} / ${config.model?.model || "未知"}`;
-        $("status").textContent = `模型 ${config.model?.provider || ""} / EchoMemory ${sessionId()}`;
+        $("modelBadge").textContent = `${config.model?.provider || "濡€崇€?} / ${config.model?.model || "閺堫亞鐓?}`;
+        $("memoryModelLabel").textContent = `${config.model?.provider || "濡€崇€?} / ${config.model?.model || "閺堫亞鐓?}`;
+        $("status").textContent = `濡€崇€?${config.model?.provider || ""} / EchoMemory ${sessionId()}`;
       } catch (error) {
         if (!isCurrentAccount(revision)) return;
         show("config", {error: error.message});
-        $("modelBadge").textContent = "模型不可用";
+        $("modelBadge").textContent = "濡€崇€锋稉宥呭讲閻?;
         $("status").innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
       }
       try {
@@ -1592,7 +1719,7 @@ INDEX_HTML = r"""<!doctype html>
       const originAccountId = activeAccount?.id || "local";
       const activeSessionId = ensureSessionId();
       const targetSession = findSession(activeSessionId);
-      if (targetSession && targetSession.title === "新对话") {
+      if (targetSession && targetSession.title === "閺傛澘顕拠?) {
         targetSession.title = content;
         if (activeSession?.id === targetSession.id) activeSession = targetSession;
         saveSessions();
@@ -1601,7 +1728,7 @@ INDEX_HTML = r"""<!doctype html>
       bubble("user", content, {persist: options.persistUser !== false});
       const pending = document.createElement("div");
       pending.className = "msg assistant";
-      pending.innerHTML = `<div class="meta">助手</div>生成中...`;
+      pending.innerHTML = `<div class="meta">閸斺晜澧?/div>閻㈢喐鍨氭稉?..`;
       $("messages").appendChild(pending);
       $("chatScroll").scrollTop = $("chatScroll").scrollHeight;
       const chatPayload = {
@@ -1609,10 +1736,11 @@ INDEX_HTML = r"""<!doctype html>
         agent_id: $("agentId").value.trim(),
         session_id: activeSessionId,
         message: content,
+        include_history: $("includeHistory").checked,
         stream: false
       };
       try {
-        $("contextView").textContent = "正在组装本轮模型上下文...";
+        $("contextView").textContent = "濮濓絽婀紒鍕棅閺堫剝鐤嗗Ο鈥崇€锋稉濠佺瑓閺?..";
         const preview = await request("/agent/context", {
           method: "POST",
           body: JSON.stringify(chatPayload)
@@ -1636,7 +1764,7 @@ INDEX_HTML = r"""<!doctype html>
         rememberMessageFor(activeSessionId, "assistant", data.assistant.content);
         if (activeSession?.id === activeSessionId) {
           if (pending.isConnected) {
-            pending.innerHTML = `<div class="meta">助手</div>${escapeHtml(data.assistant.content)}`;
+            pending.innerHTML = `<div class="meta">閸斺晜澧?/div>${escapeHtml(data.assistant.content)}`;
             showContext(data.messages, data.context_trace);
           } else {
             renderConversation();
@@ -1645,10 +1773,10 @@ INDEX_HTML = r"""<!doctype html>
         return data;
       } catch (error) {
         if (!isCurrentAccount(revision)) {
-          rememberMessageForAccount(originAccountId, activeSessionId, "tool", `请求失败：${error.message}`);
+          rememberMessageForAccount(originAccountId, activeSessionId, "tool", `鐠囬攱鐪版径杈Е閿?{error.message}`);
           throw error;
         }
-        rememberMessageFor(activeSessionId, "tool", `请求失败：${error.message}`);
+        rememberMessageFor(activeSessionId, "tool", `鐠囬攱鐪版径杈Е閿?{error.message}`);
         if (activeSession?.id === activeSessionId) {
           if (pending.isConnected) {
             pending.className = "msg tool";
@@ -1669,30 +1797,30 @@ INDEX_HTML = r"""<!doctype html>
     async function commitCurrentSession() {
       const sessionIdForCommit = ensureSessionId();
       $("commitChip").disabled = true;
-      setCommitStatus("正在提交归档...");
-      if (activeSession?.id === sessionIdForCommit) bubble("tool", "正在提交归档...");
+      setCommitStatus("濮濓絽婀幓鎰唉瑜版帗銆?..");
+      if (activeSession?.id === sessionIdForCommit) bubble("tool", "濮濓絽婀幓鎰唉瑜版帗銆?..");
       const data = await request(`/api/sessions/${encodeURIComponent(sessionIdForCommit)}/commit`, {
         method: "POST",
         body: "{}"
       });
       const commitId = data.result.commit_id || data.result.archive_id;
-      setCommitStatus(`归档已受理：${commitId}`, data);
-      if (activeSession?.id === sessionIdForCommit) bubble("tool", `归档已受理：${commitId}`);
-      else rememberMessageFor(sessionIdForCommit, "tool", `归档已受理：${commitId}`);
+      setCommitStatus(`瑜版帗銆傚鎻掑綀閻炲棴绱?{commitId}`, data);
+      if (activeSession?.id === sessionIdForCommit) bubble("tool", `瑜版帗銆傚鎻掑綀閻炲棴绱?{commitId}`);
+      else rememberMessageFor(sessionIdForCommit, "tool", `瑜版帗銆傚鎻掑綀閻炲棴绱?{commitId}`);
       try {
         const status = await waitCommit(sessionIdForCommit, commitId);
         const memorySummary = await fetchCommitMemories(sessionIdForCommit, commitId);
         renderCommitMemoryDetails(memorySummary);
         await refreshInspectors();
-        setCommitStatus(`归档完成：${commitId}`, {status, summary: memorySummary});
-        const message = `归档完成：${commitId}\n${formatCommitMemories(memorySummary)}`;
+        setCommitStatus(`瑜版帗銆傜€瑰本鍨氶敍?{commitId}`, {status, summary: memorySummary});
+        const message = `瑜版帗銆傜€瑰本鍨氶敍?{commitId}\n${formatCommitMemories(memorySummary)}`;
         if (activeSession?.id === sessionIdForCommit) bubble("tool", message);
         else rememberMessageFor(sessionIdForCommit, "tool", message);
         return memorySummary;
       } catch (error) {
-        setCommitStatus(`归档失败：${commitId}`, {error: error.message});
-        if (activeSession?.id === sessionIdForCommit) bubble("tool", `归档失败：${error.message}`);
-        else rememberMessageFor(sessionIdForCommit, "tool", `归档失败：${error.message}`);
+        setCommitStatus(`瑜版帗銆傛径杈Е閿?{commitId}`, {error: error.message});
+        if (activeSession?.id === sessionIdForCommit) bubble("tool", `瑜版帗銆傛径杈Е閿?{error.message}`);
+        else rememberMessageFor(sessionIdForCommit, "tool", `瑜版帗銆傛径杈Е閿?{error.message}`);
         throw error;
       } finally {
         $("commitChip").disabled = false;
@@ -1705,16 +1833,16 @@ INDEX_HTML = r"""<!doctype html>
       $("commitChip").disabled = true;
       try {
         setSideView("context");
-        bubble("tool", `开始记忆测试：${kind}，共 ${scenario.length} 轮。`);
+        bubble("tool", `瀵偓婵顔囪箛鍡樼ゴ鐠囨洩绱?{kind}閿涘苯鍙?${scenario.length} 鏉烆喓鈧繖);
         for (const content of scenario) {
           await sendChatMessage(content);
         }
-        bubble("tool", "测试对话完成，开始自动提交并抽取记忆。");
+        bubble("tool", "濞村鐦€电鐦界€瑰本鍨氶敍灞界磻婵鍤滈崝銊﹀絹娴溿倕鑻熼幎钘夊絿鐠佹澘绻傞妴?);
         const summary = await commitCurrentSession();
         setSideView("memory");
         show("last", {memory_test: kind, summary});
       } catch (error) {
-        bubble("tool", `记忆测试失败：${error.message}`);
+        bubble("tool", `鐠佹澘绻傚ù瀣槸婢惰精瑙﹂敍?{error.message}`);
       } finally {
         $("memoryTestChip").disabled = false;
         $("commitChip").disabled = false;
@@ -1726,14 +1854,7 @@ INDEX_HTML = r"""<!doctype html>
       try {
         await createAccount();
       } catch (error) {
-        show("last", {error: error.message});
-      }
-    };
-    $("ensureAccount").onclick = async () => {
-      const label = prompt("账户标签", "locomo") || "locomo";
-      try {
-        await ensureNamedAccount(label.trim() || "locomo");
-      } catch (error) {
+        $("status").textContent = `閺傛澘缂撴径杈Е閿?{error.message}`;
         show("last", {error: error.message});
       }
     };
@@ -1744,6 +1865,20 @@ INDEX_HTML = r"""<!doctype html>
         show("last", {error: error.message});
       }
     };
+    $("accountPromptConfirm").onclick = () => closeAccountPrompt($("accountPromptInput").value);
+    $("accountPromptCancel").onclick = () => closeAccountPrompt("");
+    $("accountPromptModal").onclick = (event) => {
+      if (event.target === $("accountPromptModal")) closeAccountPrompt("");
+    };
+    $("accountPromptInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        closeAccountPrompt($("accountPromptInput").value);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        closeAccountPrompt("");
+      }
+    });
     $("refreshTree").onclick = refreshTree;
     $("treeMode").onclick = () => { fsMode = "tree"; renderFs(currentTree.entries); };
     $("flatMode").onclick = () => { fsMode = "flat"; renderFs(currentTree.entries); };
@@ -1754,8 +1889,9 @@ INDEX_HTML = r"""<!doctype html>
     $("chatNav").onclick = () => setSideView("context");
     $("memoryNav").onclick = () => setSideView("memory");
     $("locomoNav").onclick = () => { location.href = "/agent/locomo"; };
+    $("graphEvalNav").onclick = () => { location.href = "/agent/graph-eval"; };
     $("memoryRefresh").onclick = refreshInspectors;
-    $("memoryChip").onclick = () => $("userText").value = "请基于 EchoMemory 检索结果，帮我总结当前会话中的关键记忆。";
+    $("memoryChip").onclick = () => $("userText").value = "鐠囧嘲鐔€娴?EchoMemory 濡偓缁便垻绮ㄩ弸婊愮礉鐢喗鍨滈幀鑽ょ波瑜版挸澧犳导姘崇樈娑擃厾娈戦崗鎶芥暛鐠佹澘绻傞妴?;
     $("memoryTestChip").onclick = runMemoryTest;
     $("commitChip").onclick = commitCurrentSession;
     $("sessionId").oninput = syncFsTarget;
@@ -1787,7 +1923,7 @@ LOCOMO_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LoCoMo 评测台</title>
+  <title>LoCoMo 鐠囧嫭绁撮崣?/title>
   <style>
     :root { --ink:#182235; --muted:#66758b; --line:#d7e0ec; --blue:#2357c6; --green:#16734d; --orange:#a65a16; --red:#a23a3a; }
     * { box-sizing: border-box; }
@@ -1837,35 +1973,35 @@ LOCOMO_HTML = r"""<!doctype html>
 </head>
 <body>
   <header>
-    <div><h1>LoCoMo 评测台</h1><div class="status" id="datasetStatus">加载数据集中...</div></div>
-    <div style="display:flex;gap:8px;align-items:center;"><button id="sync">刷新数据集</button><button onclick="location.href='/'">返回对话</button></div>
+    <div><h1>LoCoMo 鐠囧嫭绁撮崣?/h1><div class="status" id="datasetStatus">閸旂姾娴囬弫鐗堝祦闂嗗棔鑵?..</div></div>
+    <div style="display:flex;gap:8px;align-items:center;"><button id="sync">閸掗攱鏌婇弫鐗堝祦闂?/button><button onclick="location.href='/'">鏉╂柨娲栫€电鐦?/button></div>
   </header>
   <main>
     <section>
-      <div class="head"><h2>样本</h2><span class="tag" id="sampleCount">0</span></div>
-      <div class="toolbar"><input id="sampleSearch" placeholder="搜索 sample / speaker" /></div>
+      <div class="head"><h2>閺嶉攱婀?/h2><span class="tag" id="sampleCount">0</span></div>
+      <div class="toolbar"><input id="sampleSearch" placeholder="閹兼粎鍌?sample / speaker" /></div>
       <div class="body scroll"><div class="stack" id="samples"></div></div>
     </section>
     <section>
       <div class="head">
-        <div><h2 id="detailTitle">样本详情</h2><div class="status" id="detailSubtitle">选择左侧样本查看详情</div></div>
-        <div class="tabs"><button class="active" data-tab="import">导入</button><button data-tab="evaluate">评测</button><button data-tab="run">运行</button><button data-tab="results">结果</button></div>
+        <div><h2 id="detailTitle">閺嶉攱婀扮拠锔藉剰</h2><div class="status" id="detailSubtitle">闁瀚ㄥ锔挎櫠閺嶉攱婀伴弻銉ф箙鐠囷附鍎?/div></div>
+        <div class="tabs"><button class="active" data-tab="import">鐎电厧鍙?/button><button data-tab="evaluate">鐠囧嫭绁?/button><button data-tab="run">鏉╂劘顢?/button><button data-tab="results">缂佹挻鐏?/button></div>
       </div>
       <div class="toolbar">
         <div class="actionbar active" id="actions-import">
-          <button id="selectAllSessions">选择全部会话</button><button id="clearSessions">清空会话</button><button class="primary" id="importSessions">导入所选会话</button>
-          <label style="width:150px;">用户 ID<input id="userId" value="locomo-user" /></label>
+          <button id="selectAllSessions">闁瀚ㄩ崗銊╁劥娴兼俺鐦?/button><button id="clearSessions">濞撳懐鈹栨导姘崇樈</button><button class="primary" id="importSessions">鐎电厧鍙嗛幍鈧柅澶夌窗鐠?/button>
+          <label style="width:150px;">閻劍鍩?ID<input id="userId" value="locomo-user" /></label>
           <label style="width:160px;">Agent ID<input id="agentId" value="locomo-agent" /></label>
         </div>
         <div class="actionbar" id="actions-evaluate">
-          <button id="selectAll">选择全部 QA</button><button id="clearSelection">清空 QA</button><button class="primary" id="startRun">发起评测</button>
-          <span class="muted" id="evaluateHint">导入至少一个会话后可评测。</span>
+          <button id="selectAll">闁瀚ㄩ崗銊╁劥 QA</button><button id="clearSelection">濞撳懐鈹?QA</button><button class="primary" id="startRun">閸欐垼鎹ｇ拠鍕ゴ</button>
+          <span class="muted" id="evaluateHint">鐎电厧鍙嗛懛鍐茬毌娑撯偓娑擃亙绱扮拠婵嗘倵閸欘垵鐦庡ù瀣ㄢ偓?/span>
         </div>
         <div class="actionbar" id="actions-run">
-          <button id="refreshRunView">刷新当前运行</button><button id="openResults">查看结果</button>
+          <button id="refreshRunView">閸掗攱鏌婅ぐ鎾冲鏉╂劘顢?/button><button id="openResults">閺屻儳婀呯紒鎾寸亯</button>
         </div>
         <div class="actionbar" id="actions-results">
-          <button id="refreshResultsView">刷新结果</button><button id="backToEvaluate">返回评测</button>
+          <button id="refreshResultsView">閸掗攱鏌婄紒鎾寸亯</button><button id="backToEvaluate">鏉╂柨娲栫拠鍕ゴ</button>
         </div>
       </div>
       <div class="body">
@@ -1876,8 +2012,8 @@ LOCOMO_HTML = r"""<!doctype html>
             <div class="metric"><span class="muted">Selected Conv</span><strong id="mSelectedSessions">0</strong></div>
             <div class="metric"><span class="muted">Turns</span><strong id="mTurns">-</strong></div>
           </div>
-          <h3>会话导入</h3><div class="stack scroll" id="sessionList"></div>
-          <h3>对话预览</h3><div class="scroll" id="turns"></div>
+          <h3>娴兼俺鐦界€电厧鍙?/h3><div class="stack scroll" id="sessionList"></div>
+          <h3>鐎电鐦芥０鍕潔</h3><div class="scroll" id="turns"></div>
         </div>
         <div class="tab-pane hidden" id="tab-evaluate">
           <div class="grid">
@@ -1888,32 +2024,32 @@ LOCOMO_HTML = r"""<!doctype html>
           </div>
           <h3>QA</h3><div class="stack scroll" id="qaList"></div>
         </div>
-        <div class="tab-pane hidden" id="tab-run"><div class="stack" id="currentRun"></div><h3>事件</h3><div class="stack scroll" id="events"></div></div>
+        <div class="tab-pane hidden" id="tab-run"><div class="stack" id="currentRun"></div><h3>娴滃娆?/h3><div class="stack scroll" id="events"></div></div>
         <div class="tab-pane hidden" id="tab-results"><div class="stack scroll" id="results"></div></div>
       </div>
     </section>
     <section>
-      <div class="head"><h2>运行与历史</h2><button id="refreshRuns">刷新</button></div>
+      <div class="head"><h2>鏉╂劘顢戞稉搴″坊閸?/h2><button id="refreshRuns">閸掗攱鏌?/button></div>
       <div class="body scroll">
         <div class="stack">
           <div class="run">
-            <div class="row"><span>实时进度</span><span class="tag warn" id="sideStatus">idle</span></div>
-            <div id="sideProgress" class="muted">选择 QA 后发起评测。</div>
+            <div class="row"><span>鐎圭偞妞傛潻娑樺</span><span class="tag warn" id="sideStatus">idle</span></div>
+            <div id="sideProgress" class="muted">闁瀚?QA 閸氬骸褰傜挧鐤槑濞村鈧?/div>
           </div>
           <div>
-            <h3>回放对话</h3>
+            <h3>閸ョ偞鏂佺€电鐦?/h3>
             <div class="scroll" id="liveReplay"></div>
           </div>
           <div>
-            <h3>逐题结果</h3>
+            <h3>闁劙顣界紒鎾寸亯</h3>
             <div class="stack" id="liveScores"></div>
           </div>
           <div>
-            <h3>事件流</h3>
+            <h3>娴滃娆㈠ù?/h3>
             <div class="stack" id="sideEvents"></div>
           </div>
           <div>
-            <h3>历史评测</h3>
+            <h3>閸樺棗褰剁拠鍕ゴ</h3>
             <div class="stack" id="runs"></div>
           </div>
         </div>
@@ -1935,13 +2071,13 @@ LOCOMO_HTML = r"""<!doctype html>
     async function ensureLocomoAccount() {
       const data = await api("/agent/accounts/ensure", {method: "POST", body: JSON.stringify({label: "locomo"})});
       locomoAccount = data.account;
-      $("datasetStatus").textContent = `locomo 账户已就绪 · ${locomoAccount?.tenantId || locomoAccount?.id || ""}`;
+      $("datasetStatus").textContent = `locomo 鐠愶附鍩涘鎻掓皑缂?璺?${locomoAccount?.tenantId || locomoAccount?.id || ""}`;
     }
     async function loadDataset() {
       dataset = await api("/agent/locomo/dataset");
       await loadImports();
       const manifest = dataset.manifest || {};
-      $("datasetStatus").textContent = `${manifest.exists ? "本地数据集已就绪" : "数据集未下载"} · ${manifest.path || ""}`;
+      $("datasetStatus").textContent = `${manifest.exists ? "閺堫剙婀撮弫鐗堝祦闂嗗棗鍑＄亸杈╁崕" : "閺佺増宓侀梿鍡樻弓娑撳娴?} 璺?${manifest.path || ""}`;
       $("sampleCount").textContent = `${dataset.samples.length} samples`;
       renderSamples();
     }
@@ -1955,7 +2091,7 @@ LOCOMO_HTML = r"""<!doctype html>
       $("samples").innerHTML = items.map((item) => `
         <div class="sample ${activeSample?.sample_id === item.sample_id ? "active" : ""}" data-sample="${escapeHtml(item.sample_id)}">
           <div class="row"><span>${escapeHtml(item.sample_id)}</span><span class="tag ${importedCount(item.sample_id) ? "good" : ""}">${importedCount(item.sample_id)}/${item.session_count} imported</span></div>
-          <div class="muted">${escapeHtml(item.speaker_a || "-")} / ${escapeHtml(item.speaker_b || "-")} · ${item.session_count} sessions · ${item.turn_count} turns</div>
+          <div class="muted">${escapeHtml(item.speaker_a || "-")} / ${escapeHtml(item.speaker_b || "-")} 璺?${item.session_count} sessions 璺?${item.turn_count} turns</div>
           <div class="muted">${item.qa_count} QA</div>
         </div>`).join("");
       [...document.querySelectorAll(".sample")].forEach((node) => node.onclick = () => loadSample(node.dataset.sample));
@@ -1967,7 +2103,7 @@ LOCOMO_HTML = r"""<!doctype html>
       activeSample = await api(`/agent/locomo/dataset/${encodeURIComponent(sampleId)}`);
       selectedQa = new Set();
       selectedSessions = new Set((activeSample.sessions || []).filter((session) => !isSessionImported(session.id)).map((session) => session.id));
-      $("detailTitle").textContent = `${activeSample.sample_id} 详情`;
+      $("detailTitle").textContent = `${activeSample.sample_id} 鐠囷附鍎廯;
       $("detailSubtitle").textContent = `${activeSample.speaker_a || "-"} / ${activeSample.speaker_b || "-"}`;
       renderSamples(); renderSample();
     }
@@ -1988,18 +2124,18 @@ LOCOMO_HTML = r"""<!doctype html>
       $("mQa").textContent = qa.length; $("mSelected").textContent = selectedQa.size;
       $("mReady").textContent = imported.size > 0 ? "yes" : "no";
       $("evaluateHint").textContent = imported.size > 0
-        ? `已导入 ${imported.size} 个会话，可选择 QA 发起评测。`
-        : "导入至少一个会话后可评测。";
+        ? `瀹告彃顕遍崗?${imported.size} 娑擃亙绱扮拠婵撶礉閸欘垶鈧瀚?QA 閸欐垼鎹ｇ拠鍕ゴ閵嗕繖
+        : "鐎电厧鍙嗛懛鍐茬毌娑撯偓娑擃亙绱扮拠婵嗘倵閸欘垵鐦庡ù瀣ㄢ偓?;
       $("sessionList").innerHTML = sessions.map((session) => {
         const done = imported.has(session.id);
         const checked = selectedSessions.has(session.id);
         return `
           <div class="session ${checked ? "active" : ""} ${done ? "imported" : ""}" data-session="${escapeHtml(session.id)}">
-            <div class="row"><span>${escapeHtml(session.id)}</span><span class="tag ${done ? "good" : ""}">${done ? "已导入" : `${session.turn_count} turns`}</span></div>
+            <div class="row"><span>${escapeHtml(session.id)}</span><span class="tag ${done ? "good" : ""}">${done ? "瀹告彃顕遍崗? : `${session.turn_count} turns`}</span></div>
             <div class="muted">${escapeHtml(session.date_time || "")}</div>
             <div class="muted">${escapeHtml(session.summary || session.observation || "")}</div>
           </div>`;
-      }).join("") || "<div class='muted'>暂无会话</div>";
+      }).join("") || "<div class='muted'>閺嗗倹妫ゆ导姘崇樈</div>";
       [...document.querySelectorAll(".session")].forEach((node) => node.onclick = (event) => {
         if (isSessionImported(node.dataset.session)) return;
         if (selectedSessions.has(node.dataset.session)) selectedSessions.delete(node.dataset.session);
@@ -2014,7 +2150,7 @@ LOCOMO_HTML = r"""<!doctype html>
         </div>`).join("");
       [...document.querySelectorAll(".qa")].forEach((node) => node.onclick = () => { selectedQa.has(node.dataset.qa) ? selectedQa.delete(node.dataset.qa) : selectedQa.add(node.dataset.qa); renderSample(); });
       const turns = sessions.slice(0, 2).flatMap((session) => (session.turns || []).slice(0, 10).map((turn, index) => ({...turn, session: session.id, index})));
-      $("turns").innerHTML = turns.map((turn) => `<div class="turn ${turn.index % 2 ? "alt" : ""}"><b>${escapeHtml(turn.speaker)} · ${escapeHtml(turn.session)} · ${escapeHtml(turn.dia_id || "")}</b><br>${escapeHtml(turn.text || "")}</div>`).join("") || "<div class='muted'>暂无对话</div>";
+      $("turns").innerHTML = turns.map((turn) => `<div class="turn ${turn.index % 2 ? "alt" : ""}"><b>${escapeHtml(turn.speaker)} 璺?${escapeHtml(turn.session)} 璺?${escapeHtml(turn.dia_id || "")}</b><br>${escapeHtml(turn.text || "")}</div>`).join("") || "<div class='muted'>閺嗗倹妫ょ€电鐦?/div>";
     }
     function setTab(tab) {
       [...document.querySelectorAll(".tabs button")].forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
@@ -2026,7 +2162,7 @@ LOCOMO_HTML = r"""<!doctype html>
     }
     async function startRun() {
       if (!activeSample) return;
-      if ((importRecord().sessions || []).length === 0) throw new Error("请先导入至少一个会话");
+      if ((importRecord().sessions || []).length === 0) throw new Error("鐠囧嘲鍘涚€电厧鍙嗛懛鍐茬毌娑撯偓娑擃亙绱扮拠?);
       const qaIds = selectedQa.size ? [...selectedQa] : activeSample.qa.map((item) => item.id);
       $("startRun").disabled = true;
       try {
@@ -2066,20 +2202,20 @@ LOCOMO_HTML = r"""<!doctype html>
     }
     function renderRun(run, events) {
       const summary = run.summary || {}, progress = run.progress || {};
-      $("currentRun").innerHTML = `<div class="run"><div class="row"><span>${escapeHtml(run.run_id)}</span><span class="tag ${run.status === "completed" ? "good" : run.status === "failed" ? "bad" : "warn"}">${escapeHtml(run.status)}</span></div><div class="muted">完成 ${progress.completed || 0} / ${progress.total || 0} · F1 ${summary.token_f1 ?? "-"} · contains ${summary.contains ?? "-"}</div>${run.error ? `<div class="error">${escapeHtml(run.error)}</div>` : ""}</div>`;
+      $("currentRun").innerHTML = `<div class="run"><div class="row"><span>${escapeHtml(run.run_id)}</span><span class="tag ${run.status === "completed" ? "good" : run.status === "failed" ? "bad" : "warn"}">${escapeHtml(run.status)}</span></div><div class="muted">鐎瑰本鍨?${progress.completed || 0} / ${progress.total || 0} 璺?F1 ${summary.token_f1 ?? "-"} 璺?contains ${summary.contains ?? "-"}</div>${run.error ? `<div class="error">${escapeHtml(run.error)}</div>` : ""}</div>`;
       $("events").innerHTML = events.slice(-80).reverse().map((event) => `<div class="event"><pre>${escapeHtml(JSON.stringify(event, null, 2))}</pre></div>`).join("");
-      $("results").innerHTML = (run.results || []).map((item) => `<div class="run"><div class="row"><span>${escapeHtml(item.sample_id)} · ${escapeHtml(item.qa_id)}</span><span class="tag good">F1 ${item.scores?.token_f1 ?? 0}</span></div><div><b>Q:</b> ${escapeHtml(item.question)}</div><div><b>Gold:</b> ${escapeHtml(item.gold_answer)}</div><div class="answer turn"><b>Agent:</b><br>${escapeHtml(item.agent_answer)}</div>${item.error ? `<div class="error">${escapeHtml(item.error)}</div>` : ""}</div>`).join("") || "<div class='muted'>暂无结果</div>";
+      $("results").innerHTML = (run.results || []).map((item) => `<div class="run"><div class="row"><span>${escapeHtml(item.sample_id)} 璺?${escapeHtml(item.qa_id)}</span><span class="tag good">F1 ${item.scores?.token_f1 ?? 0}</span></div><div><b>Q:</b> ${escapeHtml(item.question)}</div><div><b>Gold:</b> ${escapeHtml(item.gold_answer)}</div><div class="answer turn"><b>Agent:</b><br>${escapeHtml(item.agent_answer)}</div>${item.error ? `<div class="error">${escapeHtml(item.error)}</div>` : ""}</div>`).join("") || "<div class='muted'>閺嗗倹妫ょ紒鎾寸亯</div>";
       $("sideStatus").textContent = run.status || "idle";
       $("sideStatus").className = `tag ${run.status === "completed" ? "good" : run.status === "failed" ? "bad" : "warn"}`;
-      $("sideProgress").innerHTML = `run: ${escapeHtml(run.run_id)}<br>完成 ${progress.completed || 0} / ${progress.total || 0}<br>token_f1 ${summary.token_f1 ?? "-"} · contains ${summary.contains ?? "-"} · errors ${summary.errors ?? 0}`;
+      $("sideProgress").innerHTML = `run: ${escapeHtml(run.run_id)}<br>鐎瑰本鍨?${progress.completed || 0} / ${progress.total || 0}<br>token_f1 ${summary.token_f1 ?? "-"} 璺?contains ${summary.contains ?? "-"} 璺?errors ${summary.errors ?? 0}`;
       const replay = events.filter((event) => event.type === "turn_replayed").slice(-80);
-      $("liveReplay").innerHTML = replay.map((event, index) => `<div class="turn ${index % 2 ? "alt" : ""}"><b>${escapeHtml(event.speaker)} · ${escapeHtml(event.session)} · ${escapeHtml(event.dia_id || "")}</b><br>${escapeHtml(event.text || "")}</div>`).join("") || "<div class='muted'>等待回放对话...</div>";
-      $("liveScores").innerHTML = (run.results || []).map((item) => `<div class="run"><div class="row"><span>${escapeHtml(item.qa_id)}</span><span class="tag ${item.error ? "bad" : "good"}">F1 ${item.scores?.token_f1 ?? 0}</span></div><div class="muted">${escapeHtml(item.category)} · contains ${item.scores?.contains ?? 0}</div><div>${escapeHtml(item.question)}</div></div>`).join("") || "<div class='muted'>等待评分...</div>";
-      $("sideEvents").innerHTML = events.slice(-12).reverse().map((event) => `<div class="event"><div class="row"><span>${escapeHtml(event.type)}</span><span class="muted">${escapeHtml(event.ts || "")}</span></div></div>`).join("") || "<div class='muted'>暂无事件</div>";
+      $("liveReplay").innerHTML = replay.map((event, index) => `<div class="turn ${index % 2 ? "alt" : ""}"><b>${escapeHtml(event.speaker)} 璺?${escapeHtml(event.session)} 璺?${escapeHtml(event.dia_id || "")}</b><br>${escapeHtml(event.text || "")}</div>`).join("") || "<div class='muted'>缁涘绶熼崶鐐存杹鐎电鐦?..</div>";
+      $("liveScores").innerHTML = (run.results || []).map((item) => `<div class="run"><div class="row"><span>${escapeHtml(item.qa_id)}</span><span class="tag ${item.error ? "bad" : "good"}">F1 ${item.scores?.token_f1 ?? 0}</span></div><div class="muted">${escapeHtml(item.category)} 璺?contains ${item.scores?.contains ?? 0}</div><div>${escapeHtml(item.question)}</div></div>`).join("") || "<div class='muted'>缁涘绶熺拠鍕瀻...</div>";
+      $("sideEvents").innerHTML = events.slice(-12).reverse().map((event) => `<div class="event"><div class="row"><span>${escapeHtml(event.type)}</span><span class="muted">${escapeHtml(event.ts || "")}</span></div></div>`).join("") || "<div class='muted'>閺嗗倹妫ゆ禍瀣╂</div>";
     }
     async function loadRuns() {
       const data = await api("/agent/locomo/runs");
-      $("runs").innerHTML = (data.runs || []).map((run) => `<div class="run" data-run="${escapeHtml(run.run_id)}"><div class="row"><span>${escapeHtml(run.run_id)}</span><span class="tag ${run.status === "completed" ? "good" : run.status === "failed" ? "bad" : "warn"}">${escapeHtml(run.status)}</span></div><div class="muted">F1 ${run.summary?.token_f1 ?? "-"} · ${run.progress?.completed ?? 0}/${run.progress?.total ?? 0} · ${escapeHtml(run.created_at || "")}</div></div>`).join("") || "<div class='muted'>暂无历史评测</div>";
+      $("runs").innerHTML = (data.runs || []).map((run) => `<div class="run" data-run="${escapeHtml(run.run_id)}"><div class="row"><span>${escapeHtml(run.run_id)}</span><span class="tag ${run.status === "completed" ? "good" : run.status === "failed" ? "bad" : "warn"}">${escapeHtml(run.status)}</span></div><div class="muted">F1 ${run.summary?.token_f1 ?? "-"} 璺?${run.progress?.completed ?? 0}/${run.progress?.total ?? 0} 璺?${escapeHtml(run.created_at || "")}</div></div>`).join("") || "<div class='muted'>閺嗗倹妫ら崢鍡楀蕉鐠囧嫭绁?/div>";
       [...document.querySelectorAll(".run[data-run]")].forEach((node) => node.onclick = () => { activeRunId = node.dataset.run; setTab("run"); pollRun(); });
     }
     $("sync").onclick = async () => { await api("/agent/locomo/dataset/sync", {method:"POST", body:JSON.stringify({force:true})}); await loadDataset(); };
@@ -2102,6 +2238,37 @@ LOCOMO_HTML = r"""<!doctype html>
 </body>
 </html>"""
 
+
+GRAPH_EVAL_HTML = r"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Graph Eval</title>
+<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f8fc;color:#162033}header{padding:12px 16px;background:#fff;border-bottom:1px solid #e5eaf3;display:flex;justify-content:space-between;align-items:center}main{display:grid;grid-template-columns:280px 1fr;gap:12px;padding:12px}aside,.panel{background:#fff;border:1px solid #e5eaf3;border-radius:12px;padding:12px}.tabs{display:flex;gap:8px;margin-bottom:10px}.tab-button{border:1px solid #d8e1f0;background:#fff;border-radius:999px;padding:6px 10px;cursor:pointer}.tab-button.active{background:#2363eb;color:#fff;border-color:#2363eb}.hidden{display:none}.case{border:1px solid #e5eaf3;border-radius:10px;padding:8px;margin-bottom:8px;cursor:pointer}.case.active{border-color:#2363eb;background:#f0f5ff}.muted{color:#6b7385;font-size:12px}.workspace{display:grid;grid-template-columns:1.1fr 0.9fr;gap:10px}.panel-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}.dialogue-list{max-height:320px;overflow:auto;display:grid;gap:8px}.turn{border:1px solid #ebeff6;border-radius:10px;padding:8px}.turn-head{display:flex;justify-content:space-between;margin-bottom:4px}.qa-list{display:grid;gap:8px;max-height:320px;overflow:auto}.qa{border:1px solid #e5eaf3;border-radius:10px;padding:8px;display:flex;gap:8px;align-items:flex-start}.result{border:1px solid #e5eaf3;border-radius:10px;padding:8px;margin-bottom:8px}.pass{color:#0f8a39;font-weight:700}.fail{color:#c43a2e;font-weight:700}.pill{border-radius:999px;padding:2px 8px;border:1px solid #d5deed;font-size:12px}.import-row{border:1px solid #e5eaf3;border-radius:10px;padding:8px;margin-bottom:8px;cursor:pointer}.import-row.active{border-color:#2363eb;background:#f0f5ff}button{border:1px solid #d5deed;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}button.primary{background:#2363eb;color:#fff;border-color:#2363eb}pre{white-space:pre-wrap;word-break:break-word;background:#f7f9fe;border:1px solid #e5eaf3;border-radius:8px;padding:8px}</style></head>
+<body><header><div><strong>Graph Eval</strong><div class="muted" id="status">ready</div></div><div><span class="muted">当前账户</span><strong id="currentAccountLabel">local account</strong><select id="accountSelect"></select><button type="button" id="createAccount">新建</button><button type="button" id="forgetAccount">移除</button><button type="button" onclick="location.href='/'">返回对话</button></div></header>
+<main><aside><div class="panel-title"><strong>评测集</strong><span class="muted" id="caseCount">0</span></div><div id="cases"></div></aside><section><div class="tabs"><button class="tab-button active" id="importTab">导入数据</button><button class="tab-button" id="evalTab">执行评测</button></div><div class="tab-panel" id="importPanel"><div class="workspace"><div><div class="panel"><div class="panel-title"><div><strong id="caseTitle">Graph Eval</strong><div class="muted" id="caseDesc"></div></div><button id="importHistory">导入历史对话</button></div><div class="muted" id="importState">尚未导入当前评测集</div></div><div class="panel"><div class="panel-title"><strong>历史对话预览</strong><span class="muted" id="dialogueStatus">0 turns</span></div><div class="dialogue-list" id="dialogueList"></div></div></div><div class="panel"><div class="panel-title"><strong>导入记录</strong><button id="refreshImports">刷新</button></div><div id="imports"></div></div></div></div><div class="tab-panel hidden" id="evalPanel"><div class="workspace"><div><div class="panel"><div class="panel-title"><div><strong>评测控制</strong><div class="muted" id="evalState">请先导入历史对话，再执行评测</div></div><button class="primary" id="run">运行评测</button></div></div><div class="panel"><div class="panel-title"><strong>问题选择</strong><div><button id="selectAllQa">全选</button><button id="clearQa">清空</button></div></div><div class="qa-list" id="qaList"></div></div><div class="panel"><div class="panel-title"><strong>评测结果</strong><button id="refreshRuns">刷新</button></div><div id="results"></div></div></div><div class="panel"><div class="panel-title"><strong>原始响应</strong></div><pre id="raw">{}</pre></div></div></div></section></main>
+<script>
+const accountStoreKey="echomem-agent.accounts.v1";let accounts=[],activeAccount=null,cases=[],selected=null,selectedQa=new Set(),activeImport=null,visibleImports=[];const $=(id)=>document.getElementById(id);
+async function api(path,options={}){const headers=Object.assign({},options.headers||{});if(activeAccount?.authKey)headers["X-Auth-Key"]=activeAccount.authKey;const response=await fetch(path,{...options,headers});const data=await response.json();if(!response.ok||data.error)throw new Error(data.message||data.error||response.statusText);return data;}
+function escapeHtml(value){return String(value??"").replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+function loadAccounts(){try{const parsed=JSON.parse(localStorage.getItem(accountStoreKey)||"[]");accounts=Array.isArray(parsed)?parsed:[]}catch(_){accounts=[]}if(!accounts.some((item)=>item.id==="local"))accounts.unshift({id:"local",label:"local account",authKey:"",tenantId:"local",userId:"local"});const activeId=localStorage.getItem(`${accountStoreKey}.active`)||"";activeAccount=accounts.find((item)=>item.id===activeId)||accounts[0];saveAccounts();}
+function saveAccounts(){localStorage.setItem(accountStoreKey,JSON.stringify(accounts.slice(0,20)));localStorage.setItem(`${accountStoreKey}.active`,activeAccount?.id||"local");renderAccounts();}
+function renderAccounts(){$("accountSelect").innerHTML=accounts.map((item)=>`<option value="${escapeHtml(item.id)}" ${item.id===activeAccount?.id?"selected":""}>${escapeHtml(item.label||item.id)}</option>`).join("");$("currentAccountLabel").textContent=activeAccount?.label||"local account";$("forgetAccount").disabled=!activeAccount||activeAccount.id==="local";}
+function accountPayload(){return{account_id:activeAccount?.id||"local",tenant_id:activeAccount?.tenantId||activeAccount?.id||"local",user_id:activeAccount?.userId||activeAccount?.id||"local"};}
+function switchTab(tab){$("importPanel").classList.toggle("hidden",tab!=="import");$("evalPanel").classList.toggle("hidden",tab!=="eval");$("importTab").classList.toggle("active",tab==="import");$("evalTab").classList.toggle("active",tab==="eval");updateImportState();}
+async function createAccount(){const label=`graph eval ${accounts.filter((item)=>item.id!=="local").length+1}`;$("status").textContent=`creating account ${label}...`;const data=await api("/agent/accounts/create",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({label})});const account=data.account;if(!account?.authKey)throw new Error("account creation returned no authKey");activeAccount={id:account.id,label:account.label,tenantId:account.tenantId,userId:account.userId,authKey:account.authKey};accounts=[activeAccount,...accounts.filter((item)=>item.id!==activeAccount.id)];saveAccounts();activeImport=null;await loadImports();$("status").textContent=`switched to ${activeAccount.label}`;}
+async function forgetAccount(){if(!activeAccount||activeAccount.id==="local")return;const removing=activeAccount;await api("/agent/accounts/forget",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:removing.id,label:removing.label})});accounts=accounts.filter((item)=>item.id!==removing.id);activeAccount=accounts[0]||{id:"local",label:"local account",authKey:"",tenantId:"local",userId:"local"};saveAccounts();activeImport=null;renderImports([]);updateImportState();}
+function caseById(id){return cases.find((item)=>item.id===id);}
+async function loadCases(){const data=await api("/agent/graph-eval/cases");cases=data.cases||[];selected=selected||cases[0]?.id||null;selectedQa=new Set((caseById(selected)?.queries||[]).slice(0,3).map((item)=>item.id));$("caseCount").textContent=`${cases.length} cases`;renderCases();await Promise.all([loadImports(),loadRuns()]);}
+function renderCases(){$("cases").innerHTML=cases.map((item)=>`<div class="case ${item.id===selected?"active":""}" data-id="${escapeHtml(item.id)}"><strong>${escapeHtml(item.title)}</strong><div class="muted">${item.ingest_count} turns / ${item.query_count} QA</div></div>`).join("");[...document.querySelectorAll(".case[data-id]")].forEach((node)=>node.onclick=async()=>{selected=node.dataset.id;selectedQa=new Set((caseById(selected)?.queries||[]).slice(0,3).map((item)=>item.id));activeImport=null;renderCases();await loadImports();});const item=caseById(selected)||{};$("caseTitle").textContent=item.title||"Graph Eval";$("caseDesc").textContent=item.description||"";renderDialogue();renderQa();updateImportState();}
+function renderDialogue(){const turns=caseById(selected)?.dialogue||[];$("dialogueStatus").textContent=`${turns.length} turns`;$("dialogueList").innerHTML=turns.map((turn)=>`<div class="turn"><div class="turn-head"><span>${escapeHtml(turn.role)}</span><span class="muted">${escapeHtml(turn.date||"")} / ${escapeHtml(turn.timestamp||"")}</span></div><div>${escapeHtml(turn.content||"")}</div></div>`).join("");}
+function renderQa(){const queries=caseById(selected)?.queries||[];$("qaList").innerHTML=queries.map((item)=>`<label class="qa"><input type="checkbox" value="${escapeHtml(item.id)}" ${selectedQa.has(item.id)?"checked":""}/><span><strong>#${escapeHtml(item.number||"?")} ${escapeHtml(item.name||"")}</strong><div class="muted">${escapeHtml(item.question_id||item.id||"")}</div><div class="muted">${escapeHtml(item.query||"")}</div>${item.expected?`<div class="muted">Expected: ${escapeHtml(item.expected)}</div>`:""}</span></label>`).join("");[...document.querySelectorAll("#qaList input")].forEach((box)=>box.onchange=()=>{if(box.checked)selectedQa.add(box.value);else selectedQa.delete(box.value);});}
+function updateImportState(){const imported=activeImport?.status==="imported"&&activeImport?.case_id===selected;$("importHistory").disabled=Boolean(imported);$("run").disabled=!imported;if(imported){$("importState").textContent=`已导入 ${activeImport.imported_count}/${activeImport.total_count} turns，记录 ${activeImport.import_id}`;$("evalState").textContent="可选择一个或多个问题执行评测";}else if(activeImport?.status==="running"){$("importState").textContent=`导入中 ${activeImport.imported_count||0}/${activeImport.total_count||0}...`;$("evalState").textContent="导入进行中，完成后才能评测";}else if(activeImport?.status==="failed"){$("importState").textContent=`导入失败: ${activeImport.error||"unknown error"}`;$("evalState").textContent="导入失败，请重试";}else{$("importState").textContent="尚未导入当前评测集";$("evalState").textContent="请先导入历史对话";}}
+async function importHistory(){$("status").textContent="importing history...";$("importHistory").disabled=true;const data=await api("/agent/graph-eval/imports",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({case_id:selected,...accountPayload()})});activeImport=data;$("raw").textContent=JSON.stringify(data,null,2);await loadImports();$("status").textContent=data.already_imported?"already imported":"import done";updateImportState();if(activeImport?.status==="imported")switchTab("eval");}
+async function runEval(){if(selectedQa.size===0)throw new Error("请至少选择一个问题");if(!activeImport||activeImport.status!=="imported")throw new Error("请先导入历史对话");$("status").textContent="running eval...";const data=await api("/agent/graph-eval/runs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({case_id:selected,import_id:activeImport.import_id,qa_ids:[...selectedQa],...accountPayload()})});renderEvalRun(data);$("raw").textContent=JSON.stringify(data,null,2);$("status").textContent=data.status||"done";await loadRuns();}
+async function loadImports(){const data=await api("/agent/graph-eval/imports");const scope=accountPayload();visibleImports=(data.imports||[]).filter((item)=>item.tenant_id===scope.tenant_id);const current=visibleImports.find((item)=>item.case_id===selected&&item.status==="imported")||visibleImports.find((item)=>item.case_id===selected)||null;activeImport=current;renderImports(visibleImports);updateImportState();}
+function renderImports(rows){$("imports").innerHTML=rows.length?rows.map((item)=>`<div class="import-row ${item.import_id===activeImport?.import_id?"active":""}" data-id="${escapeHtml(item.import_id)}"><strong>${escapeHtml(item.import_id)}</strong><div><span class="pill ${item.status==="imported"?"pass":item.status==="failed"?"fail":""}">${escapeHtml(item.status||"unknown")}</span></div><div class="muted">${escapeHtml(item.session_id||"")} / ${item.imported_count||0}/${item.total_count||0}</div></div>`).join(""):`<div class="muted">暂无导入记录</div>`;[...document.querySelectorAll(".import-row[data-id]")].forEach((node)=>node.onclick=()=>{activeImport=rows.find((item)=>item.import_id===node.dataset.id)||null;renderImports(rows);updateImportState();});}
+async function loadRuns(){const data=await api("/agent/graph-eval/runs");const scope=accountPayload();const run=(data.runs||[]).find((item)=>item.tenant_id===scope.tenant_id&&item.case_id===selected)||null;if(run)renderEvalRun(run);}
+function renderEvalRun(run){const summary=run.summary||{};$("results").innerHTML=`<div class="result"><strong>${escapeHtml(run.run_id)}</strong> <span class="${run.status==="passed"?"pass":"fail"}">${escapeHtml(run.status||"unknown")}</span><div class="muted">${escapeHtml(run.case_title||run.case_id||"")}</div><div class="muted">${escapeHtml(run.tenant_id||"")} / ${escapeHtml(run.session_id||"")}</div><div class="muted">Passed ${summary.passed??"-"} / ${summary.total??"-"}</div></div>`+(run.results||[]).map((item)=>{const memories=(item.items||[]).map((m)=>`<div class="muted">${escapeHtml(m.kind||"memory")}</div><div>${escapeHtml(m.text||m.content||"")}</div>`).join("");const answer=item.answer?`<div class="muted">Answer</div><pre>${escapeHtml(item.answer)}</pre>`:"";const expected=item.expected?`<div class="muted">Expected: ${escapeHtml(item.expected)}</div>`:"";const meta=[item.id||"",item.section||"",item.score!=null?`score=${item.score}`:""] .filter(Boolean).join(" / ");return `<div class="result"><div><strong>#${escapeHtml(item.number||"?")} ${escapeHtml(item.name||"")}</strong> <span class="${item.passed?"pass":"fail"}">${item.passed?"PASS":"FAIL"}</span></div><div class="muted">${escapeHtml(meta)}</div><div class="muted">${escapeHtml((item.failures||[]).join(", ")||"通过")}</div>${expected}<pre>${escapeHtml(item.context||"")}</pre>${answer}${memories}</div>`;}).join("");}
+$("accountSelect").onchange=()=>{activeAccount=accounts.find((item)=>item.id===$("accountSelect").value)||accounts[0];saveAccounts();activeImport=null;loadImports().catch((error)=>$("status").textContent=error.message);};$("createAccount").onclick=()=>createAccount().catch((error)=>$("status").textContent=error.message);$("forgetAccount").onclick=()=>forgetAccount().catch((error)=>$("status").textContent=error.message);$("importTab").onclick=()=>switchTab("import");$("evalTab").onclick=()=>switchTab("eval");$("importHistory").onclick=()=>importHistory().catch((error)=>{$("status").textContent=error.message;updateImportState();});$("run").onclick=()=>runEval().catch((error)=>$("status").textContent=error.message);$("selectAllQa").onclick=()=>{selectedQa=new Set((caseById(selected)?.queries||[]).map((item)=>item.id));renderQa();};$("clearQa").onclick=()=>{selectedQa=new Set();renderQa();};$("refreshImports").onclick=()=>loadImports().catch((error)=>$("status").textContent=error.message);$("refreshRuns").onclick=()=>loadRuns().catch((error)=>$("status").textContent=error.message);loadAccounts();loadCases().catch((error)=>$("status").textContent=error.message);
+</script></body></html>"""
 
 class AgentPlaygroundServer(ThreadingHTTPServer):
     """HTTP server for the standalone agent playground."""
@@ -2131,8 +2298,20 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
         if path == "/agent/locomo":
             self._send_html(LOCOMO_HTML)
             return
+        if path == "/agent/graph-eval":
+            self._send_html(GRAPH_EVAL_HTML)
+            return
         if path == "/agent/config":
             self._send_json(HTTPStatus.OK, self.server.config.public_dict())
+            return
+        if path == "/agent/graph-eval/cases":
+            self._graph_eval_cases()
+            return
+        if path == "/agent/graph-eval/runs":
+            self._graph_eval_runs()
+            return
+        if path == "/agent/graph-eval/imports":
+            self._graph_eval_imports()
             return
         if path == "/agent/locomo/dataset":
             self._locomo_dataset()
@@ -2182,6 +2361,12 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             return
         if path == "/agent/locomo/runs":
             self._locomo_run_create()
+            return
+        if path == "/agent/graph-eval/runs":
+            self._graph_eval_run_create()
+            return
+        if path == "/agent/graph-eval/imports":
+            self._graph_eval_import_create()
             return
         if path.startswith("/api/"):
             self._proxy()
@@ -2258,6 +2443,27 @@ class AgentRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, data)
         except LocomoDatasetError as exc:
             self._send_json(HTTPStatus.BAD_GATEWAY, {"error": "locomo_dataset_error", "message": str(exc)})
+
+    def _graph_eval_cases(self) -> None:
+        self._send_json(HTTPStatus.OK, GraphEvalService(self._request_config()).cases())
+
+    def _graph_eval_runs(self) -> None:
+        self._send_json(HTTPStatus.OK, GraphEvalService(self._request_config()).list_runs())
+
+    def _graph_eval_imports(self) -> None:
+        self._send_json(HTTPStatus.OK, GraphEvalService(self._request_config()).list_imports())
+
+    def _graph_eval_import_create(self) -> None:
+        try:
+            self._send_json(HTTPStatus.OK, GraphEvalService(self._request_config()).import_case(self._read_json()))
+        except (ValueError, OSError, HTTPError, URLError) as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "graph_eval_error", "message": str(exc)})
+
+    def _graph_eval_run_create(self) -> None:
+        try:
+            self._send_json(HTTPStatus.OK, GraphEvalService(self._request_config()).run(self._read_json()))
+        except (ValueError, OSError, HTTPError, URLError) as exc:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "graph_eval_error", "message": str(exc)})
 
     def _locomo_dataset(self) -> None:
         try:
@@ -2418,7 +2624,7 @@ def create_server(
     config = load_config(config_path, echomem_url=echomem_url)
     server = AgentPlaygroundServer((host, port), AgentRequestHandler, config=config)
     try:
-        _ensure_account_record(config, server.echomem_url, "locomo")
+        _ensure_account_record(config, server.echomem_url, "locomo", validate_cached=False)
     except Exception as exc:  # noqa: BLE001 - server can still run without preseeded account.
         print(f"warning: failed to preseed locomo account: {exc}")
     return server
@@ -2434,13 +2640,47 @@ def _read_registry(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _ensure_account_record(config: AgentConfig, echomem_url: str, label: str) -> dict[str, Any]:
+def _ensure_account_record(
+    config: AgentConfig,
+    echomem_url: str,
+    label: str,
+    *,
+    validate_cached: bool = True,
+) -> dict[str, Any]:
     registry_path = Path(config.locomo.data_dir) / "accounts.json"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry = _read_registry(registry_path)
     if label in registry and registry[label].get("authKey"):
-        return {"created": False, "account": registry[label]}
+        if not validate_cached:
+            return {"created": False, "account": registry[label]}
+        if _account_auth_key_is_valid(echomem_url, str(registry[label].get("authKey") or "")):
+            return {"created": False, "account": registry[label]}
+        registry.pop(label, None)
+        registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
     return _create_account_record(config, echomem_url, label, registry=registry)
+
+
+def _account_auth_key_is_valid(echomem_url: str, auth_key: str) -> bool:
+    if not auth_key:
+        return False
+    request = Request(
+        urljoin(echomem_url, "/agent/inspect/events"),
+        method="GET",
+        headers={"X-Auth-Key": auth_key},
+    )
+    try:
+        with urlopen(request, timeout=10):
+            return True
+    except HTTPError as exc:
+        if exc.code == HTTPStatus.UNAUTHORIZED:
+            exc.read()
+            return False
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise EchoMemoryClientError(f"echomemory_http_{exc.code}: {detail}") from exc
+    except URLError as exc:
+        raise EchoMemoryClientError(f"echomemory_unreachable: {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise EchoMemoryClientError(f"echomemory_timeout: {exc}") from exc
 
 
 def _create_account_record(
@@ -2455,7 +2695,7 @@ def _create_account_record(
     registry_path = Path(config.locomo.data_dir) / "accounts.json"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
     registry = registry if registry is not None else _read_registry(registry_path)
-    tenant = _echomem_json_url(echomem_url, "/api/auth/tenants", method="POST", payload={})
+    tenant = _echomem_json_url(echomem_url, "/api/auth/tenants", method="POST", payload={"name": label})
     tenant_id = str((tenant.get("tenant") or {}).get("tenant_id") or "")
     if not tenant_id:
         raise ValueError("tenant creation returned no id")
@@ -2530,3 +2770,4 @@ def serve(host: str = "127.0.0.1", port: int = 8765, echomem_url: str | None = N
 
 if __name__ == "__main__":
     serve()
+

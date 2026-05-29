@@ -9,18 +9,18 @@
   },
   "model": {
     "provider": "openai_compatible",
-    "base_url": "http://127.0.0.1:11434/v1",
-    "api_key": "local-key",
-    "model": "openclaw-default",
+    "base_url": "https://api.deepseek.com",
+    "api_key": "sk-58859baa67c740e2a1e132cc258edd78",
+    "model": "deepseek-chat",
     "temperature": 0.3,
     "max_tokens": 1024,
     "timeout_seconds": 60
   },
   "chat": {
-    "system_prompt": "你是一个接入 EchoMemory 的任务型 Agent。回答要清晰、可靠，并说明关键依据。",
+    "system_prompt": "你是一个接入 EchoMemory 的任务型中文 Agent。回答要准确、直接、可验证，先给结论，再给关键依据。",
     "history_turns": 8,
     "retrieval_enabled": true,
-    "retrieval_limit": 6,
+    "retrieval_limit": 12,
     "auto_commit": "manual",
     "context_budget_tokens": 12000
   }
