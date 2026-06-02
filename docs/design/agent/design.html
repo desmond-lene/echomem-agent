@@ -36,8 +36,8 @@
         <div class="card"><strong>22</strong><br/>失败</div>
         <div class="card"><strong>29.03%</strong><br/>通过率</div>
       </div>
-      <p class="mono">评测结果：docs/design/agent/chenmo_eval_results.json</p>
-      <p class="mono">阶段进度：docs/design/agent/chenmo_eval_progress.jsonl（导入/逐题实时）</p>
+      <p class="mono">评测结果：历史 Chenmo 评测产物已清理，当前仅保留通用设计说明。</p>
+      <p class="mono">阶段进度：评测执行产物不再放入 docs，避免堆积临时文件。</p>
     </section>
 
     <section class="section">
@@ -91,7 +91,7 @@
       <p><strong>3.4 可观测与回归</strong></p>
       <ul>
         <li>保留每题 artifacts：query plan、召回项、证据链、最终回答、判分。</li>
-        <li>把 Chenmo 场景纳入长期回归集，目标是阶段性提升而非一次性调参过拟合。</li>
+        <li>把长时记忆场景纳入长期回归集，目标是阶段性提升而非一次性调参过拟合。</li>
       </ul>
     </section>
 
@@ -112,9 +112,6 @@
     <section class="section">
       <h2>5. 本轮交付清单</h2>
       <ul>
-        <li><span class="mono">scripts/run_chenmo_eval.py</span>：已改为分阶段执行，支持实时进展与每题结果落盘。</li>
-        <li><span class="mono">docs/design/agent/chenmo_eval_progress.jsonl</span>：导入与逐题执行日志。</li>
-        <li><span class="mono">docs/design/agent/chenmo_eval_partial.json</span>：逐题更新快照。</li>
         <li><span class="mono">docs/design/agent/principle.html</span>：从 echomemory 同步原则文档。</li>
         <li><span class="mono">docs/design/agent/design.html</span>：本设计说明。</li>
       </ul>
