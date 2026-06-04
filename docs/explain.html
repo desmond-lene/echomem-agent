@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EchoMem Agent Explain Mock</title>
+  <style>
+    :root {
+      --bg: #eef1f6;
+      --paper: #ffffff;
+      --sidebar: #f4f6fb;
+      --line: #d8dfeb;
+      --text: #182235;
+      --muted: #69788f;
+      --brand: #335eea;
+      --brand-soft: #eaf0ff;
+      --green: #0f7b53;
+      --green-soft: #e7f7f0;
+      --amber: #9a5b10;
+      --amber-soft: #fff2df;
+      --code: #f6f8fc;
+      --shadow: 0 16px 42px rgba(30, 41, 73, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(69, 103, 214, 0.08), transparent 28%),
+        linear-gradient(180deg, #f7f9fd 0, var(--bg) 220px);
+      color: var(--text);
+      font: 14px/1.6 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .page {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+      padding: 14px 18px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+    .title h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+    .title p {
+      margin: 4px 0 0;
+      color: var(--muted);
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .switch {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      white-space: nowrap;
+    }
+    .switch .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--green);
+      box-shadow: 0 0 0 6px rgba(15, 123, 83, 0.12);
+    }
+    .chip {
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(760px, 1.2fr) minmax(380px, 0.8fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .chat-shell {
+      display: grid;
+      grid-template-columns: 230px minmax(0, 1fr);
+      min-height: 860px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      overflow: hidden;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .nav {
+      background: var(--sidebar);
+      border-right: 1px solid #e7ebf3;
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      font-weight: 800;
+    }
+    .brand-badge {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: #111827;
+      color: #fff;
+    }
+    .nav-group-title {
+      margin: 8px 10px 0;
+      color: #8d96a8;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .nav-item {
+      padding: 9px 10px;
+      border-radius: 10px;
+      color: #384457;
+      font-weight: 700;
+      background: transparent;
+    }
+    .nav-item.active {
+      background: #ffffff;
+      box-shadow: 0 8px 22px rgba(48, 60, 94, 0.08);
+    }
+    .nav-item.subtle {
+      color: #5f6e84;
+      font-weight: 600;
+    }
+    .nav-footer {
+      margin-top: auto;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid #e4e9f2;
+      background: #fff;
+      color: #5c677a;
+      font-size: 12px;
+    }
+    .main {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-width: 0;
+      background: linear-gradient(180deg, #fff 0, #fcfdff 100%);
+    }
+    .main-head {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .head-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+    }
+    .status-pill {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-weight: 700;
+    }
+    .messages {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+      background:
+        linear-gradient(180deg, rgba(234, 240, 255, 0.24) 0, rgba(255,255,255,0) 160px),
+        #fcfdff;
+    }
+    .msg {
+      max-width: 82%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(41, 52, 83, 0.05);
+    }
+    .msg.user {
+      justify-self: end;
+      background: #edf2ff;
+      border-color: #cdd9ff;
+    }
+    .msg .role {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .composer {
+      padding: 16px 18px 18px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 12px;
+    }
+    .chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .soft-chip {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: #f3f5fa;
+      color: #536176;
+      font-weight: 700;
+    }
+    .input {
+      min-height: 74px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      color: #2d3748;
+    }
+    .side {
+      display: grid;
+      gap: 16px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .panel-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: linear-gradient(180deg, #fff 0, #fbfcff 100%);
+    }
+    .panel-head h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .panel-body {
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .mini-card {
+      padding: 12px 13px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fcfdff;
+    }
+    .mini-card .label {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .mini-card .value {
+      font-weight: 700;
+      word-break: break-word;
+    }
+    .summary {
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid #cfe5d9;
+      background: var(--green-soft);
+    }
+    .summary strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--green);
+    }
+    .explain-block {
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid #eadbbf;
+      background: #fffaf1;
+      display: grid;
+      gap: 12px;
+    }
+    .explain-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .explain-title {
+      display: grid;
+      gap: 3px;
+    }
+    .explain-title strong {
+      font-size: 15px;
+    }
+    .explain-title span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #e4d4b1;
+      color: #7d531b;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .explain-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .explain-card {
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #eadfc8;
+      background: rgba(255,255,255,0.84);
+    }
+    .explain-card .label {
+      margin-bottom: 4px;
+      color: #85663a;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .tool-call {
+      padding: 12px 13px;
+      border-radius: 14px;
+      border: 1px solid #e8d9bd;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+    }
+    .tool-call strong {
+      font-size: 14px;
+    }
+    pre {
+      margin: 0;
+      padding: 12px 13px;
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--code);
+      color: #304056;
+      font: 12px/1.55 Consolas, "SFMono-Regular", monospace;
+    }
+    .fold {
+      border: 1px dashed #d9c9a8;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.72);
+      overflow: hidden;
+    }
+    .fold summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 12px 13px;
+      font-weight: 700;
+      color: #7b5a26;
+    }
+    .fold summary::-webkit-details-marker { display: none; }
+    .footnote {
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.9);
+      color: var(--muted);
+      margin-top: 16px;
+    }
+    @media (max-width: 1220px) {
+      .layout { grid-template-columns: 1fr; }
+      .chat-shell { min-height: 720px; }
+    }
+    @media (max-width: 860px) {
+      .chat-shell { grid-template-columns: 1fr; }
+      .nav { display: none; }
+      .grid, .explain-grid { grid-template-columns: 1fr; }
+      .msg { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="topbar">
+      <div class="title">
+        <h1>EchoMem Agent Explain 效果稿</h1>
+        <p>基于当前 echomem-agent 页面结构，模拟开启 retrieval explain 后的界面展示。</p>
+      </div>
+      <div class="controls">
+        <div class="switch">
+          <div class="dot"></div>
+          <span><strong>retrieval_explain_enabled</strong> = true</span>
+        </div>
+        <div class="chip">只读调试信息</div>
+        <div class="chip">不进入模型上下文</div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="chat-shell">
+        <aside class="nav">
+          <div class="brand">
+            <div class="brand-badge">E</div>
+            <div>EchoMem Agent</div>
+          </div>
+          <div class="nav-item active">对话</div>
+          <div class="nav-item subtle">Context</div>
+          <div class="nav-item subtle">EchoMemory</div>
+
+          <div class="nav-group-title">最近会话</div>
+          <div class="nav-item subtle">修复 recall explain 展示</div>
+          <div class="nav-item subtle">设计 template router</div>
+          <div class="nav-item subtle">对齐 tool.json 结构</div>
+
+          <div class="nav-footer">
+            <div><strong>当前模式</strong></div>
+            <div>chat + retrieval + memory panel</div>
+            <div style="margin-top:8px;"><strong>目标</strong></div>
+            <div>在现有页面里查看 retrieval explain。</div>
+          </div>
+        </aside>
+
+        <section class="main">
+          <div class="main-head">
+            <div>
+              <strong>会话：session_agent_debug_001</strong>
+              <div class="head-meta">user_a / agent_a / echo://sessions/session_agent_debug_001</div>
+            </div>
+            <div class="status-pill">Memory Panel Active</div>
+          </div>
+
+          <div class="messages">
+            <div class="msg user">
+              <div class="role">User</div>
+              <div>我之前说过我喜欢什么样的回答风格吗？</div>
+            </div>
+
+            <div class="msg">
+              <div class="role">Assistant</div>
+              <div>你之前表达过偏好简洁、技术性强、先给结论再给依据的回答方式。当前这轮召回命中了 tree 引擎的偏好类记忆。</div>
+            </div>
+
+            <div class="msg">
+              <div class="role">Retrieved Memory</div>
+              <div>
+                1. [preferences/tree] 用户偏好简洁技术回答。<br>
+                2. [preferences/tree] 先给结论，再补关键依据。<br>
+                3. [profile/tree] 用户经常在设计评审中要求直接、少铺垫。
+              </div>
+            </div>
+          </div>
+
+          <div class="composer">
+            <div class="chips">
+              <div class="soft-chip">记忆检索</div>
+              <div class="soft-chip">Context Preview</div>
+              <div class="soft-chip">Commit Memory</div>
+            </div>
+            <div class="input">请基于 EchoMemory 检索结果，总结我当前的回答风格偏好。</div>
+          </div>
+        </section>
+      </div>
+
+      <div class="side">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>EchoMemory 面板</h2>
+            <div class="chip">memoryPanel</div>
+          </div>
+          <div class="panel-body">
+            <div class="grid">
+              <div class="mini-card">
+                <div class="label">Session</div>
+                <div class="value">session_agent_debug_001</div>
+              </div>
+              <div class="mini-card">
+                <div class="label">Model</div>
+                <div class="value">openai_compatible / gpt-4.1-mini</div>
+              </div>
+              <div class="mini-card">
+                <div class="label">Target</div>
+                <div class="value">echo://sessions/session_agent_debug_001</div>
+              </div>
+              <div class="mini-card">
+                <div class="label">Retrieval Limit</div>
+                <div class="value">12</div>
+              </div>
+            </div>
+
+            <div class="summary">
+              <strong>本次 Retrieval</strong>
+              查询命中了长期偏好类记忆，返回 3 条结果。explain 已启用，可查看本次路由意图、原因、引擎和 tool arguments。
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Retrieval Explain</h2>
+            <div class="chip">建议新增区块</div>
+          </div>
+          <div class="panel-body">
+            <div class="explain-block">
+              <div class="explain-head">
+                <div class="explain-title">
+                  <strong>Explain 已启用</strong>
+                  <span>当前 retrieval 响应携带 explain，可用于查看路由和工具调用信息。</span>
+                </div>
+                <div class="tags">
+                  <div class="tag">intent: user_preference</div>
+                  <div class="tag">item_count: 3</div>
+                </div>
+              </div>
+
+              <div class="explain-grid">
+                <div class="explain-card">
+                  <div class="label">Reason</div>
+                  <div>template:tree.user_preference_lookup.v1:0.8123</div>
+                </div>
+                <div class="explain-card">
+                  <div class="label">Engines</div>
+                  <div>tree</div>
+                </div>
+              </div>
+
+              <div class="tool-call">
+                <strong>tree.tree_vector_search</strong>
+                <div style="color: var(--muted);">模板路由直接命中 tree 引擎的偏好类记忆召回。</div>
+                <pre>{
+  "categories": [
+    "preferences"
+  ],
+  "query": "我之前说过我喜欢什么样的回答风格吗？",
+  "limit": 12
+}</pre>
+              </div>
+
+              <details class="fold" open>
+                <summary>查看原始 explain JSON</summary>
+                <pre>{
+  "intent": "user_preference",
+  "reason": "template:tree.user_preference_lookup.v1:0.8123",
+  "engines": [
+    "tree"
+  ],
+  "item_count": 3,
+  "tool_calls": [
+    {
+      "engine": "tree",
+      "name": "tree_vector_search",
+      "arguments": {
+        "categories": [
+          "preferences"
+        ],
+        "query": "我之前说过我喜欢什么样的回答风格吗？",
+        "limit": 12
+      }
+    }
+  ]
+}</pre>
+              </details>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>对比状态</h2>
+            <div class="chip">未启用时的空态</div>
+          </div>
+          <div class="panel-body">
+            <div class="mini-card" style="background: var(--amber-soft); border-color: #ead6ad;">
+              <div class="label" style="color:#8b621c;">Explain Disabled</div>
+              <div class="value" style="font-weight: 600; color:#6d5a36;">
+                当前未启用 retrieval explain。<br>
+                EchoMemory 请求中不会携带 <code>include_explain: true</code>，该区块显示为空态提示。
+              </div>
+            </div>
+            <pre>{
+  "chat": {
+    "retrieval_enabled": true,
+    "retrieval_limit": 12,
+    "retrieval_explain_enabled": false
+  }
+}</pre>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="footnote">
+      这是一份静态效果稿，不代表最终实现细节。当前建议是把 explain 放在现有 <code>memoryPanel</code> 内，作为检索调试区查看，而不是放入聊天正文或模型上下文。
+    </div>
+  </div>
+</body>
+</html>

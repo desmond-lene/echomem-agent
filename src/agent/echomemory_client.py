@@ -59,6 +59,7 @@ class EchoMemoryClient:
         agent_id: str,
         session_id: str,
         limit: int,
+        include_explain: bool,
     ) -> dict[str, Any]:
         del user_id
         return self.post(
@@ -68,7 +69,7 @@ class EchoMemoryClient:
                 "agent_id": agent_id,
                 "session_id": session_id,
                 "limit": limit,
-                "include_explain": True,
+                "include_explain": include_explain,
             },
         )
 

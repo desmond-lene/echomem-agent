@@ -132,6 +132,7 @@ class AgentChatService:
         queries = self._expand_queries(query)
         merged_items: list[dict[str, Any]] = []
         errors: list[str] = []
+        explain_payload: dict[str, Any] | None = None
         try:
             for item_query in queries:
                 result = self.memory.search(
@@ -140,23 +141,33 @@ class AgentChatService:
                     agent_id=agent_id,
                     session_id=session_id,
                     limit=self.config.chat.retrieval_limit,
+                    include_explain=self.config.chat.retrieval_explain_enabled,
                 )
+                if explain_payload is None:
+                    explain_payload = self._extract_explain(result, item_query)
                 merged_items.extend(self._extract_items(result))
         except EchoMemoryClientError as exc:
             errors.append(str(exc))
 
         if not merged_items:
+            response = {"items": []}
+            if explain_payload is not None:
+                response["explain"] = explain_payload
             if errors:
-                return {"items": [], "error": errors[0], "degraded": True}
-            return {"items": []}
+                response["error"] = errors[0]
+                response["degraded"] = True
+            return response
 
         ranked_items = self._rank_items(query, merged_items)
-        return {
+        response = {
             "items": ranked_items[: self.config.chat.retrieval_limit],
             "query_plan": queries,
             "degraded": bool(errors),
             "errors": errors,
         }
+        if explain_payload is not None:
+            response["explain"] = explain_payload
+        return response
 
     def _expand_queries(self, query: str) -> list[str]:
         base = query.strip()
@@ -183,6 +194,15 @@ class AgentChatService:
         if isinstance(result, dict) and isinstance(result.get("items"), list):
             return [item for item in result["items"] if isinstance(item, dict)]
         return []
+
+    def _extract_explain(self, payload: dict[str, Any], query: str) -> dict[str, Any] | None:
+        value = payload.get("explain")
+        if isinstance(value, dict):
+            return {"query": query, **value}
+        result = payload.get("result")
+        if isinstance(result, dict) and isinstance(result.get("explain"), dict):
+            return {"query": query, **result["explain"]}
+        return None
 
     def _rank_items(self, query: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         keywords = [token for token in re.findall(r"[A-Za-z0-9_\u4e00-\u9fff]+", query.lower()) if len(token) >= 2]

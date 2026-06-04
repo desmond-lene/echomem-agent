@@ -43,6 +43,7 @@ class ChatConfig:
     history_turns: int = 8
     retrieval_enabled: bool = True
     retrieval_limit: int = 12
+    retrieval_explain_enabled: bool = True
     auto_commit: str = "manual"
     context_budget_tokens: int = 12000
 
