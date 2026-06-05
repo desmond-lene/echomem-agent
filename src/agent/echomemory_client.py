@@ -60,6 +60,7 @@ class EchoMemoryClient:
         session_id: str,
         limit: int,
         include_explain: bool,
+        include_debug: bool,
     ) -> dict[str, Any]:
         del user_id
         return self.post(
@@ -70,6 +71,7 @@ class EchoMemoryClient:
                 "session_id": session_id,
                 "limit": limit,
                 "include_explain": include_explain,
+                "include_debug": include_debug,
             },
         )
 

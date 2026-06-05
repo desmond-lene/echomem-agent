@@ -691,6 +691,109 @@ INDEX_HTML = r"""<!doctype html>
       color: #6b4c20;
       font-weight: 800;
     }
+    .retrieval-result {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid #dbe3f0;
+      border-radius: 10px;
+      background: #f8fbff;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .retrieval-result-empty { color: var(--muted); }
+    .retrieval-result-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .retrieval-result-title {
+      color: #244a7a;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .retrieval-result-subtitle {
+      color: #7a8495;
+      font-size: 12px;
+    }
+    .retrieval-result-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .retrieval-result-tag {
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #d9e6f7;
+      color: #244a7a;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .retrieval-result-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .retrieval-result-card {
+      padding: 8px;
+      border: 1px solid #d9e6f7;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+    }
+    .retrieval-result-card strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #244a7a;
+      font-size: 12px;
+    }
+    .retrieval-result-item {
+      padding: 8px;
+      border: 1px solid #d9e6f7;
+      border-radius: 8px;
+      background: #fff;
+    }
+    .retrieval-result-item strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #22304a;
+      font-size: 13px;
+    }
+    .retrieval-result-item-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .retrieval-result-item-meta span {
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #f1f6ff;
+      color: #36598d;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .retrieval-result pre {
+      min-height: 0;
+      max-height: 220px;
+      margin-top: 6px;
+      background: #fff;
+    }
+    .retrieval-result details {
+      border: 1px dashed #c8d8ee;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.78);
+      overflow: hidden;
+    }
+    .retrieval-result summary {
+      cursor: pointer;
+      padding: 8px 10px;
+      color: #244a7a;
+      font-weight: 800;
+    }
     .send-button {
       display: grid;
       place-items: center;
@@ -727,6 +830,13 @@ INDEX_HTML = r"""<!doctype html>
       min-height: 0;
     }
     #explainPanel.active {
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 10px;
+      min-height: 0;
+    }
+    #resultPanel.active {
       display: grid;
       grid-template-columns: 1fr;
       grid-template-rows: auto minmax(0, 1fr);
@@ -885,7 +995,7 @@ INDEX_HTML = r"""<!doctype html>
       .header-actions { flex-wrap: wrap; }
       .account-switcher { grid-template-columns: 1fr; width: 100%; }
       .memory-grid { grid-template-columns: 1fr; }
-      .retrieval-explain-grid { grid-template-columns: 1fr; }
+      .retrieval-explain-grid, .retrieval-result-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -1031,6 +1141,7 @@ INDEX_HTML = r"""<!doctype html>
           <div class="side-tabs" id="sideTabs">
             <button class="side-tab active" id="sideContextTab">模型上下文</button>
             <button class="side-tab" id="sideExplainTab">explain 调试</button>
+            <button class="side-tab" id="sideResultTab">返回内容</button>
           </div>
         </div>
         <span class="status" id="sideStatus">模型上下文</span>
@@ -1044,6 +1155,12 @@ INDEX_HTML = r"""<!doctype html>
           <label>Retrieval Explain</label>
           <div class="retrieval-explain" id="retrievalExplainDetails">
             <div class="retrieval-explain-empty">当前未启用 retrieval explain，或本次 retrieval 未返回 explain。</div>
+          </div>
+        </div>
+        <div class="side-view" id="resultPanel">
+          <label>Retrieval 返回内容</label>
+          <div class="retrieval-result" id="retrievalResultDetails">
+            <div class="retrieval-result-empty">发送消息后，这里会显示本次 retrieval 返回的完整信息。</div>
           </div>
         </div>
         <div class="side-view" id="memoryPanel">
@@ -1085,6 +1202,7 @@ INDEX_HTML = r"""<!doctype html>
     let activeSession = null;
     let lastCommitMemorySummary = null;
     let lastRetrievalExplain = null;
+    let lastRetrievalResult = null;
     let retrievalExplainEnabled = false;
     let inspectorTab = "context";
     let accounts = [];
@@ -1130,15 +1248,19 @@ INDEX_HTML = r"""<!doctype html>
       if (detail) show("last", detail);
     }
     function applyInspectorTab() {
+      const showContext = inspectorTab === "context";
       const showExplain = inspectorTab === "explain";
-      $("contextPanel").classList.toggle("active", !showExplain);
+      const showResult = inspectorTab === "result";
+      $("contextPanel").classList.toggle("active", showContext);
       $("explainPanel").classList.toggle("active", showExplain);
-      $("sideContextTab").classList.toggle("active", !showExplain);
+      $("resultPanel").classList.toggle("active", showResult);
+      $("sideContextTab").classList.toggle("active", showContext);
       $("sideExplainTab").classList.toggle("active", showExplain);
-      $("sideStatus").textContent = showExplain ? "explain 调试" : "模型上下文";
+      $("sideResultTab").classList.toggle("active", showResult);
+      $("sideStatus").textContent = showExplain ? "explain 调试" : (showResult ? "返回内容" : "模型上下文");
     }
     function setInspectorTab(tab) {
-      inspectorTab = tab === "explain" ? "explain" : "context";
+      inspectorTab = tab === "explain" ? "explain" : (tab === "result" ? "result" : "context");
       if ($("memoryPanel").classList.contains("active")) {
         return;
       }
@@ -1148,6 +1270,10 @@ INDEX_HTML = r"""<!doctype html>
       retrievalExplainEnabled = enabled === true;
       lastRetrievalExplain = explain && typeof explain === "object" ? explain : null;
       $("retrievalExplainDetails").innerHTML = retrievalExplainHtml(lastRetrievalExplain, retrievalExplainEnabled);
+    }
+    function renderRetrievalResult(result) {
+      lastRetrievalResult = result && typeof result === "object" ? result : null;
+      $("retrievalResultDetails").innerHTML = retrievalResultHtml(lastRetrievalResult);
     }
     function retrievalExplainHtml(explain, enabled) {
       if (!enabled) {
@@ -1224,6 +1350,69 @@ INDEX_HTML = r"""<!doctype html>
         <details>
           <summary>查看原始 explain JSON</summary>
           <pre>${escapeHtml(JSON.stringify(explain, null, 2))}</pre>
+        </details>
+      `;
+    }
+    function retrievalResultHtml(result) {
+      if (!result) {
+        return `<div class="retrieval-result-empty">本次还没有 retrieval 返回内容。</div>`;
+      }
+      const items = Array.isArray(result.items) ? result.items : [];
+      const queryPlan = Array.isArray(result.query_plan) ? result.query_plan : [];
+      const errors = Array.isArray(result.errors) ? result.errors : [];
+      const tags = [
+        `<span class="retrieval-result-tag">items: ${escapeHtml(String(items.length))}</span>`,
+        queryPlan.length ? `<span class="retrieval-result-tag">query_plan: ${escapeHtml(String(queryPlan.length))}</span>` : "",
+        result.degraded ? `<span class="retrieval-result-tag">degraded</span>` : "",
+        errors.length ? `<span class="retrieval-result-tag">errors: ${escapeHtml(String(errors.length))}</span>` : ""
+      ].filter(Boolean).join("");
+      const itemsHtml = items.length > 0
+        ? items.map((item, index) => {
+            const text = String(item.text || item.content || item.summary || "-");
+            const meta = [
+              item.kind ? `<span>kind: ${escapeHtml(String(item.kind))}</span>` : "",
+              item.source ? `<span>source: ${escapeHtml(String(item.source))}</span>` : "",
+              Number.isFinite(Number(item.score)) ? `<span>score: ${escapeHtml(String(item.score))}</span>` : ""
+            ].filter(Boolean).join("");
+            return `
+              <div class="retrieval-result-item">
+                <strong>Item ${index + 1}</strong>
+                <div class="retrieval-result-item-meta">${meta || "<span>no metadata</span>"}</div>
+                <div>${escapeHtml(text)}</div>
+              </div>
+            `;
+          }).join("")
+        : `<div class="retrieval-result-empty">本次 retrieval 返回了 0 条 items。</div>`;
+      return `
+        <div class="retrieval-result-head">
+          <div>
+            <div class="retrieval-result-title">Retrieval 返回内容</div>
+            <div class="retrieval-result-subtitle">查看本次 recall 的完整结果对象，包括 items、query_plan、errors 和原始 JSON。</div>
+          </div>
+          <div class="retrieval-result-tags">${tags}</div>
+        </div>
+        <div class="retrieval-result-grid">
+          <div class="retrieval-result-card">
+            <strong>Items</strong>
+            <div>${escapeHtml(String(items.length))}</div>
+          </div>
+          <div class="retrieval-result-card">
+            <strong>Degraded</strong>
+            <div>${escapeHtml(String(Boolean(result.degraded)))}</div>
+          </div>
+          <div class="retrieval-result-card">
+            <strong>Query Plan</strong>
+            <div>${escapeHtml(queryPlan.length > 0 ? queryPlan.join(" | ") : "-")}</div>
+          </div>
+          <div class="retrieval-result-card">
+            <strong>Errors</strong>
+            <div>${escapeHtml(errors.length > 0 ? errors.join(" | ") : "-")}</div>
+          </div>
+        </div>
+        ${itemsHtml}
+        <details>
+          <summary>查看原始 retrieval JSON</summary>
+          <pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre>
         </details>
       `;
     }
@@ -1848,6 +2037,7 @@ INDEX_HTML = r"""<!doctype html>
         $("memoryModelLabel").textContent = `${config.model?.provider || "模型"} / ${config.model?.model || "未知"}`;
         $("status").textContent = `模型 ${config.model?.provider || ""} / EchoMemory ${sessionId()}`;
         renderRetrievalExplain(lastRetrievalExplain, retrievalExplainEnabled);
+        renderRetrievalResult(lastRetrievalResult);
       } catch (error) {
         if (!isCurrentAccount(revision)) return;
         show("config", {error: error.message});
@@ -1909,7 +2099,10 @@ INDEX_HTML = r"""<!doctype html>
           method: "POST",
           body: JSON.stringify(chatPayload)
         });
-        if (isCurrentAccount(revision)) renderRetrievalExplain(preview.retrieval?.explain || null, retrievalExplainEnabled);
+        if (isCurrentAccount(revision)) {
+          renderRetrievalExplain(preview.retrieval?.explain || null, retrievalExplainEnabled);
+          renderRetrievalResult(preview.retrieval || null);
+        }
         if (!isCurrentAccount(revision)) {
           rememberContextForAccount(originAccountId, activeSessionId, preview.messages, preview.context_trace);
         } else {
@@ -1920,7 +2113,10 @@ INDEX_HTML = r"""<!doctype html>
           method: "POST",
           body: JSON.stringify(chatPayload)
         });
-        if (isCurrentAccount(revision)) renderRetrievalExplain(data.retrieval?.explain || null, retrievalExplainEnabled);
+        if (isCurrentAccount(revision)) {
+          renderRetrievalExplain(data.retrieval?.explain || null, retrievalExplainEnabled);
+          renderRetrievalResult(data.retrieval || null);
+        }
         if (!isCurrentAccount(revision)) {
           rememberContextForAccount(originAccountId, activeSessionId, data.messages, data.context_trace);
           rememberMessageForAccount(originAccountId, activeSessionId, "assistant", data.assistant.content);
@@ -2041,6 +2237,7 @@ INDEX_HTML = r"""<!doctype html>
     $("memoryNav").onclick = () => setSideView("memory");
     $("sideContextTab").onclick = () => setInspectorTab("context");
     $("sideExplainTab").onclick = () => setInspectorTab("explain");
+    $("sideResultTab").onclick = () => setInspectorTab("result");
     $("locomoNav").onclick = () => { location.href = "/agent/locomo"; };
     $("memoryRefresh").onclick = refreshInspectors;
     $("memoryChip").onclick = () => $("userText").value = "请基于 EchoMemory 检索结果，帮我总结当前会话中的关键记忆。";

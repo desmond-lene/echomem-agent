@@ -142,6 +142,7 @@ class AgentChatService:
                     session_id=session_id,
                     limit=self.config.chat.retrieval_limit,
                     include_explain=self.config.chat.retrieval_explain_enabled,
+                    include_debug=True,
                 )
                 if explain_payload is None:
                     explain_payload = self._extract_explain(result, item_query)
